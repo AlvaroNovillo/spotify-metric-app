@@ -44,17 +44,22 @@
         {# Include the partial to display artist info #}
         {% include '_artist_display.html' %}
 
-    {% else %} {# No main_artist found for the query #}
+        {% else %}
+        {# No artist found message #}
         <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
             <h2 class="text-2xl font-semibold mb-4">No Artist Found</h2>
-            <p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p>
+            {% if query %}
+                <p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p>
+            {% else %}
+                 <p class="text-gray-400">Could not retrieve details for the previously searched artist.</p>
+            {% endif %}
         </div>
     {% endif %}
 {% else %}
-    {# Initial state before search #}
-    <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
-        <p class="text-gray-400">Enter an artist name above to view their metrics.</p>
-    </div>
+   {# Initial state BEFORE first search OR if session is empty #}
+   <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+       <p class="text-gray-400">Enter an artist name above to view their metrics. The last searched artist will be shown if you return to this page.</p>
+   </div>
 {% endif %} {# end search_performed #}
 
 {% endblock %}
