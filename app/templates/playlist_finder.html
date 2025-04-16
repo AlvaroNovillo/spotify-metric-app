@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if selected_track_name %}
+        Playlist Results for {{ selected_track_name }}
+    {% else %}
+        Find Playlists by Track
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-4 text-center">Find Playlist Recommendations by Track</h1>
+<p class="text-center text-gray-400 text-sm mb-6">Select one of {{ artist_name }}'s top tracks below and search for relevant playlists.</p>
+
+{# Disclaimer (Keep this!) #}
+<div class="max-w-3xl mx-auto bg-yellow-900 border border-yellow-700 text-yellow-100 px-4 py-3 rounded relative mb-8" role="alert">
+  <strong class="font-bold">Warning:</strong>
+  <span class="block sm:inline"> This feature uses an external, undocumented service (PlaylistSupply) via scraping. It requires stored credentials and is <strong class="underline">highly likely to break</strong> without notice if the external service changes. Use with caution.</span>
+</div>
+
+
+{# --- NEW Improved Track Selection Form --- #}
+<div class="mb-10 max-w-3xl mx-auto bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+    <h2 class="text-xl font-semibold mb-5 text-center">Select a Track by {{ artist_name }}</h2>
+    {% if top_tracks %}
+        <form method="GET" action="{{ url_for('playlists.playlist_finder') }}">
+            {# Grid layout for track selection cards #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {% for track in top_tracks %}
+                    <label class="flex items-center bg-gray-700 p-3 rounded-lg shadow hover:bg-gray-650 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500 has-[:checked]:bg-gray-700 group">
+                        {# Radio button (visually hidden but functional) #}
+                         <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required
+                               {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
+
+                         {# Album Cover #}
+                         {% if track.album and track.album.images %}
+                            <img src="{{ track.album.images[-1].url }}" alt="{{ track.album.name }} Cover" class="w-12 h-12 rounded flex-shrink-0 object-cover mr-3 border border-gray-600">
+                         {% else %}
+                            <div class="w-12 h-12 rounded flex-shrink-0 bg-gray-600 flex items-center justify-center mr-3 text-gray-500 text-xl">?</div>
+                         {% endif %}
+
+                         {# Track Info #}
+                         <div class="flex-grow overflow-hidden">
+                             <span class="block text-sm font-medium text-gray-100 truncate group-hover:text-white" title="{{ track.name }}">{{ track.name }}</span>
+                             <span class="block text-xs text-gray-400 truncate" title="{{ track.artists | map(attribute='name') | join(', ') }}">
+                                 {{ track.artists | map(attribute='name') | join(', ') }}
+                             </span>
+                         </div>
+
+                         {# Checkmark indication for selected item #}
+                         <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 group-has-[:checked]:border-green-500 group-has-[:checked]:bg-green-500 flex items-center justify-center transition-colors duration-200">
+                              <svg class="w-3 h-3 text-white opacity-0 group-has-[:checked]:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                         </div>
+                    </label>
+                {% endfor %}
+            </div>
+             <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">
+                Find Playlists for Selected Track
+             </button>
+        </form>
+    {% elif top_tracks is not none %}
+        <p class="text-center text-gray-500 italic">No top tracks found for {{ artist_name }} to select from.</p>
+    {% else %}
+         <p class="text-center text-red-400 italic">Could not load top tracks for {{ artist_name }}.</p>
+    {% endif %}
+</div>
+{# --- End Track Selection --- #}
+
+
+{# --- Display Search Results (Conditional - same logic as before) --- #}
+{% if search_performed %}
+    <hr class="border-gray-700 my-8">
+    <h2 class="text-2xl font-bold mb-6 text-center">Playlist Results for "<span class="text-green-400">{{ selected_track_name or 'Selected Track' }}</span>"</h2>
+
+    {% if playlists is none %}
+        {# Error Message #}
+        <div class="text-center p-10 bg-red-900 border border-red-700 rounded-lg shadow-xl">
+            <h2 class="text-2xl font-semibold mb-4 text-red-100">Error Fetching Playlists</h2>
+            <p class="text-red-200">Could not retrieve playlist recommendations from the external service due to a network or request error.</p>
+        </div>
+    {% elif not playlists %}
+        {# No Results Message #}
+         <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+            <h2 class="text-2xl font-semibold mb-4">No Relevant Playlists Found</h2>
+            <p class="text-gray-400">No relevant playlists were found via PlaylistSupply for the keywords derived from "{{ selected_track_name or 'the selected track' }}", genres, and similar artists.</p>
+             <p class="text-sm text-gray-500 mt-2">(The external service might be unavailable, no matches found, or scraping logic needs update.)</p>
+        </div>
+    {% else %}
+        {# Results Grid #}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for playlist in playlists %}
+            {# Playlist Card (Unchanged from previous version) #}
+            <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-700 hover:border-green-600 transition-colors duration-200">
+                <div class="p-4 border-b border-gray-700">
+                     <a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer" class="text-lg font-semibold text-green-400 hover:text-green-300 hover:underline truncate block" title="{{ playlist.name }}">{{ playlist.name }}</a>
+                     <p class="text-xs text-gray-400 mt-1">Curated by: <span class="text-gray-300">{{ playlist.owner_name | default('N/A') }}</span>{% if playlist.owner_url %}<a href="{{ playlist.owner_url }}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1">(Profile ↗)</a>{% endif %}</p>
+                </div>
+                <div class="p-4 flex flex-col flex-grow">
+                    {% if playlist.description %}<p class="text-sm text-gray-300 mb-3 line-clamp-4" title="{{ playlist.description }}">{{ playlist.description }}</p>{% else %}<p class="text-sm text-gray-500 italic mb-3">No description provided.</p>{% endif %}
+                    <div class="mt-auto pt-3 space-y-1 text-xs border-t border-gray-700">
+                        <div class="flex justify-between"><span class="text-gray-400">Followers:</span><span class="font-medium text-gray-200">{{ playlist.followers | default('N/A') }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Total Tracks:</span><span class="font-medium text-gray-200">{{ playlist.tracks_total | default('N/A') }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Curator Email:</span>{% if playlist.email %}<a href="mailto:{{ playlist.email }}" class="font-medium text-blue-400 hover:underline truncate" title="{{ playlist.email }}">{{ playlist.email }}</a>{% else %}<span class="font-medium text-gray-500 italic">Not Found</span>{% endif %}</div>
+                         <div class="flex justify-between"><span class="text-gray-400">Last Modified:</span><span class="font-medium text-gray-300">{{ playlist.last_modified | capitalize | default('Unknown') }}</span></div>
+                    </div>
+                     <div class="mt-4">{% if playlist.url and 'open.spotify.com/playlist/' in playlist.url %}<a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer" class="w-full text-center block bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">View on Spotify ↗</a>{% else %}<span class="w-full text-center block bg-gray-600 text-gray-400 text-sm font-semibold py-2 px-4 rounded cursor-not-allowed">Invalid URL</span>{% endif %}</div>
+                </div>
+            </div>
+            {% endfor %} {# End playlist loop #}
+        </div>
+        <p class="text-center text-xs text-gray-500 mt-6 italic">(Found {{ playlists|length }} unique playlists across multiple keyword searches)</p>
+    {% endif %} {# End playlists check #}
+{% endif %} {# End search_performed check #}
+
+{# Link back (Always show) #}
+<div class="text-center mt-10">
+    <a href="{{ url_for('main.artist_dashboard') }}" class="inline-block px-6 py-2 bg-gray-600 rounded text-lg font-semibold hover:bg-gray-500 transition duration-300">
+        ← Back to My Artist
+    </a>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Custom scrollbar for track list */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #374151; /* gray-700 */
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #4b5563; /* gray-600 */
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #6b7280; /* gray-500 */
+    }
+    /* For Firefox */
+    .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: #4b5563 #374151;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,23 @@
+/* Optional: Add custom styles or overrides here */
+/* e.g., body { font-family: 'Inter', sans-serif; } */
+
+/* Custom scrollbar styles (from playlist_finder_base.html) */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #374151; /* gray-700 */
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563; /* gray-600 */
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280; /* gray-500 */
+}
+/* For Firefox */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #374151; /* thumb track */
+}

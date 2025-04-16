@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Artists in Similar Genres{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-2 text-center">Artists in Genres Similar To {{ main_artist_name }}</h1>
+{% if search_genres %}
+    <p class="text-center text-gray-400 text-sm mb-8">(Based on genres: {{ search_genres | join(', ') }})</p>
+{% else %}
+    <p class="text-center text-gray-400 text-sm mb-8">(Could not determine genres for {{ main_artist_name }})</p>
+{% endif %}
+
+
+{% if artists %}
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% for artist in artists %}
+    {# --- MODIFICATION: Wrap the card content in a link to the search page --- #}
+    <a href="{{ url_for('main.search_artist', query=artist.name) }}"
+       class="block bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition duration-300 group">
+        <div class="flex flex-col h-full"> {# Ensure link covers the whole card area #}
+            {% if artist.images %}
+                <img src="{{ artist.images[0].url }}" alt="{{ artist.name }}" class="w-full h-48 object-cover">
+            {% else %}
+                <div class="w-full h-48 bg-gray-700 flex items-center justify-center"><span class="text-gray-500 text-sm">No Image</span></div>
+            {% endif %}
+            <div class="p-4 flex flex-col flex-grow">
+                {# Add group-hover effect for text color #}
+                <h3 class="text-xl font-semibold mb-1 truncate text-white group-hover:text-green-400 transition duration-300" title="{{ artist.name }}">{{ artist.name }}</h3>
+                <span class="text-blue-400 group-hover:text-blue-300 text-xs mb-3 inline-block transition duration-300">
+                    View Details →
+                </span>
+                {# Stats remain the same #}
+                <div class="text-sm text-gray-400 mb-1">Followers: {% if artist.followers and artist.followers.total is not none %}{{ "{:,}".format(artist.followers.total) }}{% else %}N/A{% endif %}</div>
+                <div class="text-sm text-gray-400">Popularity: {% if artist.popularity is not none %}{{ artist.popularity }} / 100{% else %}N/A{% endif %}</div>
+                {% if artist.popularity is not none %}
+                <div class="w-full bg-gray-600 rounded-full h-1.5 mt-1 mb-3"><div class="bg-green-500 h-1.5 rounded-full" style="width: {{ artist.popularity }}%"></div></div>
+                {% else %}
+                 <div class="w-full bg-gray-600 rounded-full h-1.5 mt-1 mb-3"><div class="bg-gray-500 h-1.5 rounded-full" style="width: 0%"></div></div>
+                {% endif %}
+                 {% if artist.genres %}
+                    <div class="mt-auto pt-2"><p class="text-xs text-gray-500 uppercase mb-1">Top Genres</p><div class="flex flex-wrap gap-1">{% for genre in artist.genres[:3] %}<span class="bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-xs">{{ genre }}</span>{% endfor %}</div></div>
+                {% endif %}
+            </div>
+        </div>
+    </a> {# End of link wrapper #}
+    {% endfor %}
+</div>
+{% else %}
+{# Fallback message unchanged #}
+<div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+    <h2 class="text-2xl font-semibold mb-4">Could Not Find Similar Artists by Genre</h2>
+    <p class="text-gray-400">We couldn't find other artists based on the genres associated with {{ main_artist_name }}.</p>
+    {% if search_genres %} <p class="text-sm text-gray-500 mt-2">Searched genres: {{ search_genres | join(', ') }}</p> {% endif %}
+     <p class="text-sm text-gray-500 mt-2">(This feature uses genre tags and may not find all relevant artists.)</p>
+</div>
+{% endif %}
+
+{# Link back remains the same #}
+<div class="text-center mt-8">
+    <a href="{{ url_for('main.artist_dashboard') }}" class="inline-block px-6 py-2 bg-gray-600 rounded text-lg font-semibold hover:bg-gray-500 transition duration-300">
+        ← Back to My Artist
+    </a>
+</div>
+{% endblock %}

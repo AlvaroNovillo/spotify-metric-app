@@ -1,0 +1,47 @@
+<!-- artist.html -->
+{% extends 'base.html' %}
+
+{% block title %}{% if artist %}{{ artist.name }}{% else %}Artist{% endif %} - Artist Metrics{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6 text-center">My Artist Metrics</h1>
+
+{% if artist %}
+    {# Set variables for the partial - includes playlists_mentioning #}
+    {% set display_artist = artist %}
+    {% set display_releases = releases %}
+    {% set top_tracks = top_tracks %}
+    {% set release_stats = release_stats %}
+    {% set playlists_mentioning = playlists_mentioning %} {# Pass playlist data #}
+
+    {# Include the shared artist display partial #}
+    {% include '_artist_display.html' %}
+
+    {# Links to Similar Genres & Similar Playlists #}
+    <div class="text-center mt-[-2rem] mb-10 flex flex-wrap justify-center gap-4"> {# Adjust margin & layout #}
+         {% if session.get('main_artist_id') %}
+             <a href="{{ url_for('main.similar_genre_artists') }}" class="inline-block px-6 py-2 bg-blue-500 rounded text-lg font-semibold hover:bg-blue-600 transition duration-300">
+                View Similar Genre Artists
+             </a>
+             {# NEW Link to Playlists Featuring Similar #}
+             <a href="{{ url_for('playlists.playlist_finder') }}" class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300">
+                View Recommended Playlist to Promote your Songs
+             </a>
+         {% else %}
+             <p class="text-sm text-gray-500 italic">(Visit this page again after login to enable similar artist features)</p>
+         {% endif %}
+    </div>
+
+{% else %}
+    {# Fallback message (unchanged) #}
+    <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+        <h2 class="text-2xl font-semibold mb-4">Could not find Artist Data</h2>
+        <p class="text-gray-400">We couldn't retrieve your top or most recently followed artist data.</p>
+        <p class="text-gray-500 text-sm mt-2">(Ensure you follow an artist & grant permissions.)</p>
+         <a href="{{ url_for('main.login') }}" class="mt-4 inline-block px-6 py-2 bg-green-500 rounded font-semibold hover:bg-green-600 transition duration-300">
+            Login / Re-authenticate
+        </a>
+    </div>
+{% endif %}
+
+{% endblock %}

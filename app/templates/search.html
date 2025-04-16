@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Search Artist - Spotify Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6 text-center">Search for an Artist</h1>
+
+{# Search Form (unchanged) #}
+<div class="mb-8 max-w-xl mx-auto">
+    <form method="GET" action="{{ url_for('main.search_artist') }}" class="flex items-center bg-gray-800 rounded-full shadow-md overflow-hidden">
+        <input type="text" name="query" placeholder="Enter artist name..." value="{{ query or '' }}" required class="w-full px-6 py-3 bg-transparent text-white focus:outline-none">
+        <button type="submit" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold transition duration-300">Search</button>
+    </form>
+</div>
+
+{# Display Search Results #}
+{% if search_performed %}
+    {% if main_artist %}
+        <h2 class="text-2xl font-bold mb-4 text-center text-green-300">Search Result: {{ main_artist.name }}</h2>
+
+        {# Set variables for the partial - now includes top_tracks and release_stats #}
+        {% set display_artist = main_artist %}
+        {% set display_releases = main_artist_releases %}
+        {% set top_tracks = top_tracks %} {# Pass top_tracks from route #}
+        {% set release_stats = release_stats %} {# Pass release_stats from route #}
+
+
+        {# Include the partial #}
+        {% include '_artist_display.html' %}
+
+        {# Removed Related Artists Section remains removed #}
+
+    {% else %} {# No main_artist found #}
+        <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl"><h2 class="text-2xl font-semibold mb-4">No Artist Found</h2><p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p></div>
+    {% endif %}
+{% endif %} {# end search_performed #}
+
+{% endblock %}

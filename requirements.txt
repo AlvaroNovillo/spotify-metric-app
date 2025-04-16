@@ -1,0 +1,8 @@
+Flask>=2.0
+Flask-Session>=0.4
+python-dotenv>=0.15
+spotipy>=2.19
+requests>=2.25
+beautifulsoup4>=4.9
+google-generativeai>=0.4
+urllib3>=1.26.19 # Explicitly add for compatibility

@@ -1,0 +1,57 @@
+{# --- START OF FILE templates/playlist_finder_results.html --- #}
+
+{# Only render results section if search was actually performed #}
+{% if search_performed %}
+
+    {# --- Results Section Header --- #}
+    <hr class="border-gray-700 my-8">
+    <h2 class="text-2xl font-bold mb-6 text-center">Playlist Results for "<span class="text-green-400">{{ selected_track_name or 'Selected Track' }}</span>"</h2>
+
+    {# --- Handle Different Result States --- #}
+    {% if global_error %}
+        <div class="text-center p-6 bg-red-900 border border-red-700 rounded-lg shadow-xl">
+            <h3 class="text-xl font-semibold mb-2 text-red-100">Search Error</h3>
+            <p class="text-red-200">{{ global_error }}</p>
+        </div>
+    {% elif playlists is none %}
+        <div class="text-center p-6 bg-red-900 border border-red-700 rounded-lg shadow-xl">
+             <h3 class="text-xl font-semibold mb-2 text-red-100">Error</h3>
+             <p class="text-red-200">Could not retrieve playlist recommendations.</p>
+        </div>
+    {% elif not playlists %}
+        <div class="text-center p-6 bg-gray-700 rounded-lg shadow">
+            <h3 class="text-xl font-semibold mb-2">No Relevant Playlists Found</h3>
+            {% if has_scrape_error %}
+                 <p class="text-gray-400">No playlists found via PlaylistSupply. Some keyword searches may have failed.</p>
+            {% else %}
+                <p class="text-gray-400">No playlists found via PlaylistSupply for the keywords used.</p>
+            {% endif %}
+             <p class="text-sm text-gray-500 mt-2">(Try different keywords or check the external service.)</p>
+        </div>
+    {% else %}
+        {# --- Results Grid (Compacted) --- #}
+        <div class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2"> {# Max height and scroll #}
+            {% for playlist in playlists %}
+            {# Playlist Card #}
+            <div class="bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600">
+                <div class="p-3 border-b border-gray-600">
+                     <a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer" class="text-base font-semibold text-green-300 hover:text-green-200 hover:underline truncate block" title="{{ playlist.name }}">{{ playlist.name }}</a>
+                     <p class="text-xs text-gray-400 mt-1">By: <span class="text-gray-200">{{ playlist.owner_name | default('N/A') }}</span>{% if playlist.owner_url %}<a href="{{ playlist.owner_url }}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1">↗</a>{% endif %}</p>
+                </div>
+                <div class="p-3 flex flex-col flex-grow text-xs">
+                    {% if playlist.description %}<p class="text-gray-300 mb-2 line-clamp-2 text-xs" title="{{ playlist.description }}">{{ playlist.description }}</p>{% endif %}
+                    <div class="mt-auto pt-2 space-y-1 border-t border-gray-600">
+                        <div class="flex justify-between"><span class="text-gray-400">Followers:</span><span class="font-medium text-gray-200">{{ playlist.followers | default('N/A') }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Tracks:</span><span class="font-medium text-gray-200">{{ playlist.tracks_total | default('N/A') }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Email:</span>{% if playlist.email %}<a href="mailto:{{ playlist.email }}" class="font-medium text-blue-400 hover:underline truncate" title="{{ playlist.email }}">{{ playlist.email }}</a>{% else %}<span class="font-medium text-gray-500 italic">N/A</span>{% endif %}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %} {# End playlist loop #}
+        </div>
+        <p class="text-center text-xs text-gray-500 mt-4 italic">(Found {{ playlists|length }} unique playlists{% if has_scrape_error %}, some searches may have failed{% endif %})</p>
+    {% endif %} {# End playlists check #}
+
+{% endif %} {# End search_performed check #}
+
+{# --- END OF FILE templates/playlist_finder_results.html --- #}
