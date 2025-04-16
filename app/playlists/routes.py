@@ -12,7 +12,7 @@ import spotipy
 from . import playlists_bp
 # Import the NEW client credentials function
 from ..spotify.auth import get_spotify_client_credentials_client
-from ..spotify.data import fetch_similar_genre_artists_data # Needed for keyword generation
+from ..spotify.data import fetch_similar_artists_by_genre # Needed for keyword generation
 from ..spotify.utils import parse_follower_count # Needed for sorting playlists
 from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply # Import scraper
 from .email import generate_email_content, send_single_email, format_error_message # Import email helpers
@@ -124,7 +124,7 @@ def playlist_finder(artist_id):
 
             # Step 2.2: Fetch Similar Artists (for keywords) - Use fetched artist context
             print("[PlaylistFinder Stream] Fetching similar genre artists for keywords...")
-            similar_artists = fetch_similar_genre_artists_data(sp, artist_id, artist_name, artist_genres, limit=5)
+            similar_artists = fetch_similar_artists_by_genre(sp, artist_id, artist_name, artist_genres, limit=5)
 
             # Step 2.3: Generate Keywords (uses fetched artist context)
             keywords = set()

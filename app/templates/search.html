@@ -1,3 +1,4 @@
+{# --- START OF (REVISED) FILE app/templates/search.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}
@@ -11,41 +12,55 @@
 {% block content %}
 <h1 class="text-3xl font-bold mb-6 text-center">Search for an Artist</h1>
 
-{# Search Form (unchanged) #}
+{# Search Form - Added IDs and loader #}
 <div class="mb-8 max-w-xl mx-auto">
-    <form method="GET" action="{{ url_for('main.search_artist') }}" class="flex items-center bg-gray-800 rounded-full shadow-md overflow-hidden">
-        <input type="text" name="query" placeholder="Enter artist name..." value="{{ query or '' }}" required class="w-full px-6 py-3 bg-transparent text-white focus:outline-none">
-        <button type="submit" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold transition duration-300">Search</button>
+    <form method="GET" action="{{ url_for('main.search_artist') }}" id="artist-search-form" class="relative"> {# Added relative positioning #}
+        <div class="flex items-center bg-gray-800 rounded-full shadow-md overflow-hidden">
+            <input type="text" name="query" id="artist-query-input" placeholder="Enter artist name..." value="{{ query or '' }}" required class="w-full px-6 py-3 bg-transparent text-white focus:outline-none peer">
+            <button type="submit" id="artist-search-button" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold transition duration-300 disabled:opacity-70 disabled:cursor-wait">
+                <span class="button-text">Search</span>
+                <span class="button-loading hidden animate-pulse">Searching...</span> {# Hidden loading text #}
+            </button>
+        </div>
+         {# Loading Indicator (absolute positioned inside relative form) #}
+        <div id="search-loading-indicator" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden">
+             <div class="loader inline-block border-2 border-gray-500 border-t-green-400 rounded-full w-6 h-6 animate-spin"></div>
+        </div>
     </form>
+     {# Add a small note below the search bar #}
+     <p id="search-status-text" class="text-center text-xs text-gray-500 mt-2 h-4"></p> {# Height prevents layout shift #}
 </div>
 
-{# Display Search Results #}
+{# Display Search Results (Content remains the same) #}
 {% if search_performed %}
     {% if main_artist %}
-        {# Artist Found - Display Details using Partial #}
+        {# ... Artist Header Logic ... #}
         <h2 class="text-2xl font-bold mb-4 text-center text-green-300">Search Result: {{ main_artist.name }}</h2>
-
-        {# Links to related pages - ONLY show if artist found #}
         <div class="text-center mb-8 flex flex-wrap justify-center gap-4">
-             <a href="{{ url_for('main.similar_genre_artists', artist_id=main_artist.id) }}" class="inline-block px-6 py-2 bg-blue-500 rounded text-lg font-semibold hover:bg-blue-600 transition duration-300">
-                View Similar Genre Artists
+             {# --- MODIFIED: Added ID and Spans to Similar Artists Link --- #}
+             <a href="{{ url_for('main.similar_artists', artist_id=main_artist.id) }}"
+                id="view-similar-button" {# Added ID #}
+                class="inline-block px-6 py-2 bg-blue-500 rounded text-lg font-semibold hover:bg-blue-600 transition duration-300 relative disabled:opacity-70 disabled:cursor-wait"> {# Added relative for potential spinner positioning #}
+                 <span class="button-text">View Similar Artists</span>
+                 <span class="button-loading hidden animate-pulse">Loading...</span> {# Hidden loading text #}
              </a>
-             <a href="{{ url_for('playlists.playlist_finder', artist_id=main_artist.id) }}" class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300">
-                Find Playlists for Artist
+             {# --- MODIFIED: Added ID and Spans to Playlist Finder Link --- #}
+             <a href="{{ url_for('playlists.playlist_finder', artist_id=main_artist.id) }}"
+                id="find-playlists-button" {# Added ID #}
+                class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300 relative disabled:opacity-70 disabled:cursor-wait"> {# Added relative for potential spinner positioning #}
+                 <span class="button-text">Find Playlists for Artist</span>
+                 <span class="button-loading hidden animate-pulse">Loading...</span> {# Hidden loading text #}
              </a>
         </div>
-
-        {# Set variables for the partial #}
         {% set display_artist = main_artist %}
         {% set display_releases = main_artist_releases %}
         {% set top_tracks = top_tracks %}
         {% set release_stats = release_stats %}
-
-        {# Include the partial to display artist info #}
         {% include '_artist_display.html' %}
 
-        {% else %}
+    {% else %}
         {# No artist found message #}
+        {# ... remains the same ... #}
         <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
             <h2 class="text-2xl font-semibold mb-4">No Artist Found</h2>
             {% if query %}
@@ -56,10 +71,89 @@
         </div>
     {% endif %}
 {% else %}
-   {# Initial state BEFORE first search OR if session is empty #}
+   {# Initial state #}
+   {# ... remains the same ... #}
    <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
        <p class="text-gray-400">Enter an artist name above to view their metrics. The last searched artist will be shown if you return to this page.</p>
    </div>
 {% endif %} {# end search_performed #}
 
 {% endblock %}
+
+{# Add JavaScript for the search loading indicator AND navigation buttons #}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Search Form Logic (as before) ---
+        const searchForm = document.getElementById('artist-search-form');
+        const searchButton = document.getElementById('artist-search-button');
+        const queryInput = document.getElementById('artist-query-input');
+        const searchLoadingIndicator = document.getElementById('search-loading-indicator');
+        const searchStatusText = document.getElementById('search-status-text');
+        const searchButtonTextSpan = searchButton ? searchButton.querySelector('.button-text') : null;
+        const searchButtonLoadingSpan = searchButton ? searchButton.querySelector('.button-loading') : null;
+
+        if (searchForm && searchButton && queryInput && searchLoadingIndicator && searchButtonTextSpan && searchButtonLoadingSpan && searchStatusText) {
+            searchForm.addEventListener('submit', function(event) {
+                if (!queryInput.value.trim()) {
+                    searchStatusText.textContent = 'Please enter an artist name.';
+                    searchStatusText.classList.add('text-red-400');
+                    event.preventDefault();
+                    return;
+                }
+                searchButton.disabled = true;
+                searchButtonTextSpan.classList.add('hidden');
+                searchButtonLoadingSpan.classList.remove('hidden');
+                searchLoadingIndicator.classList.remove('hidden');
+                queryInput.classList.add('opacity-50');
+                searchStatusText.textContent = 'Searching...';
+                searchStatusText.classList.remove('text-red-400');
+            });
+        } else {
+            console.error("Search form elements not found for loading indicator setup.");
+        }
+
+        // --- Navigation Button Logic ---
+        function setupNavLinkLoading(buttonId) {
+            const navButton = document.getElementById(buttonId);
+            const buttonTextSpan = navButton ? navButton.querySelector('.button-text') : null;
+            const buttonLoadingSpan = navButton ? navButton.querySelector('.button-loading') : null;
+
+            if (navButton && buttonTextSpan && buttonLoadingSpan) {
+                navButton.addEventListener('click', function() {
+                    // Check if already disabled (prevents double click issues)
+                    if (navButton.classList.contains('disabled')) return;
+
+                    navButton.classList.add('disabled', 'pointer-events-none'); // Visually disable
+                    buttonTextSpan.classList.add('hidden');
+                    buttonLoadingSpan.classList.remove('hidden');
+
+                    // Optional: Add a small delay before navigation starts, mostly visual
+                    // setTimeout(() => {
+                    //    // Navigation will proceed automatically due to the href
+                    // }, 50);
+                });
+
+                // Add pagehide/pageshow listeners to re-enable if user navigates back
+                window.addEventListener('pageshow', function(event) {
+                    // 'persisted' indicates page was loaded from cache (back button)
+                     if (event.persisted) {
+                         navButton.classList.remove('disabled', 'pointer-events-none');
+                         buttonTextSpan.classList.remove('hidden');
+                         buttonLoadingSpan.classList.add('hidden');
+                     }
+                 });
+
+            } else {
+                 console.warn(`Navigation button elements not found for ID: ${buttonId}`);
+            }
+        }
+
+        // Setup for both buttons
+        setupNavLinkLoading('view-similar-button');
+        setupNavLinkLoading('find-playlists-button');
+
+    });
+</script>
+{% endblock %}
+{# --- END OF (REVISED) FILE app/templates/search.html --- #}
