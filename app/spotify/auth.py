@@ -1,85 +1,60 @@
 # --- START OF FILE app/spotify/auth.py ---
 import os
-import time
-from flask import session, redirect, url_for, flash, current_app
+import traceback
+from flask import current_app, flash # Keep flash if needed elsewhere, though less common now
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyClientCredentials
 
-# Initialize OAuth object using config from app factory
-# This assumes create_app sets up the config before this module is heavily used.
-# A more robust approach might pass the app instance or config explicitly if needed outside request context.
-sp_oauth = SpotifyOAuth(
-    client_id=os.environ.get('SPOTIPY_CLIENT_ID'), # Direct os.environ access needed at import time
-    client_secret=os.environ.get('SPOTIPY_CLIENT_SECRET'),
-    redirect_uri=os.environ.get('SPOTIPY_REDIRECT_URI'),
-    scope=os.environ.get('SPOTIFY_SCOPE', 'user-read-private user-read-email user-top-read user-follow-read'),
-    cache_path=os.environ.get('SPOTIPY_CACHE_PATH', ".spotifycache")
-)
+# --- Client Credentials Manager ---
+# Use environment variables directly as configured in Config
+client_id = os.environ.get('SPOTIPY_CLIENT_ID')
+client_secret = os.environ.get('SPOTIPY_CLIENT_SECRET')
 
+# Initialize the manager only if credentials exist
+client_credentials_manager = None
+if client_id and client_secret:
+    try:
+        # REMOVED cache_path argument here
+        client_credentials_manager = SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        print("SpotifyClientCredentials manager initialized.")
+    except Exception as e:
+        print(f"ERROR initializing SpotifyClientCredentials manager: {e}")
+        # Keep it None if initialization fails
+        client_credentials_manager = None
 
-def get_token_info():
-    """Retrieves token info from session or cache, handling potential refresh."""
-    token_info = session.get('token_info', None)
+else:
+    print("WARNING: SPOTIPY_CLIENT_ID or SPOTIPY_CLIENT_SECRET not found. Spotify API calls will fail.")
 
-    if not token_info:
-        # Fallback to cache if not in session (e.g., after server restart)
-        cached_token = sp_oauth.get_cached_token()
-        if cached_token:
-            token_info = cached_token
-            session['token_info'] = token_info # Store in session if found in cache
-            print("Token info loaded from cache into session.")
-        else:
-             # No token in session or cache
-             return None
-
-    # Check if token is expired or nearing expiration (e.g., within 60 seconds)
-    now = int(time.time())
-    is_expired = token_info.get('expires_at', 0) - now < 60
-
-    if is_expired:
-        print("Spotify token expired or nearing expiration, attempting refresh...")
-        try:
-            refresh_token = token_info.get('refresh_token')
-            if not refresh_token:
-                print("No refresh token found in token info. Cannot refresh.")
-                session.clear() # Clear session as token is invalid
-                return None
-
-            # Attempt to refresh the token
-            token_info = sp_oauth.refresh_access_token(refresh_token)
-            session['token_info'] = token_info # IMPORTANT: Update session with new token
-            print("Spotify token successfully refreshed.")
-
-        except spotipy.exceptions.SpotifyOauthError as e:
-            print(f"Spotify OAuth error during token refresh: {e}")
-            flash('Your Spotify login session has expired. Please login again.', 'error')
-            session.clear() # Clear session on refresh failure
-            return None
-        except Exception as e:
-            print(f"Unexpected error refreshing Spotify token: {e}")
-            flash('An error occurred while refreshing your Spotify session. Please login again.', 'error')
-            session.clear() # Clear session on unexpected error
-            return None
-
-    return token_info
-
-def get_spotify_client():
-    """Gets an authenticated Spotipy client instance, handling token refresh."""
-    token_info = get_token_info()
-
-    if not token_info:
-        print("No valid Spotify token info found.")
-        # Don't flash here, let the calling route handle UI messages if needed
+# --- Get Spotify Client (Client Credentials) ---
+def get_spotify_client_credentials_client():
+    """
+    Gets an authenticated Spotipy client instance using Client Credentials Flow.
+    Returns None if credentials are not configured or authentication fails.
+    """
+    if not client_credentials_manager:
+        print("Error: Spotify Client Credentials Manager not initialized. Check .env file and logs.")
+        # Returning None is appropriate here
         return None
 
     try:
-        # Create the Spotipy client with the valid access token
-        sp = spotipy.Spotify(auth=token_info['access_token'])
-        # Optional: Verify client works with a simple call
-        # sp.current_user()
+        # Create the Spotipy client using the manager
+        # The manager handles token fetching and caching internally (based on Spotipy's implementation)
+        sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+        print("Spotify client created using Client Credentials Manager.")
+        # Optional validation removed for brevity, manager should handle auth errors
         return sp
+
+    except spotipy.oauth2.SpotifyOauthError as oauth_error:
+        print(f"Spotify OAuth (Client Credentials) Error during client creation/token fetch: {oauth_error}")
+        # Don't usually flash here, return None and let caller handle
+        return None
     except Exception as e:
-        print(f"Error creating Spotify client instance: {e}")
+        print(f"Unexpected error creating Spotify client (Client Credentials): {e}")
+        traceback.print_exc()
+        # Don't usually flash here
         return None
 
 # --- END OF FILE app/spotify/auth.py ---

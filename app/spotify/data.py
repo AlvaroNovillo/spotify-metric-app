@@ -1,8 +1,10 @@
+# --- START OF FILE app/spotify/data.py ---
 import time
 import traceback
-from flask import session # Needed for potential session clearing on auth error
+from flask import session # Still potentially useful for session clearing on critical errors
 import spotipy
-from .auth import get_spotify_client # Import helper to get client for pagination
+# Import the CORRECT function name for getting the client credentials client
+from .auth import get_spotify_client_credentials_client
 
 
 def fetch_similar_genre_artists_data(sp_client, artist_id, artist_name, artist_genres, limit=5):
@@ -10,7 +12,7 @@ def fetch_similar_genre_artists_data(sp_client, artist_id, artist_name, artist_g
     Fetches a list of artists based on genre similarity to the main artist.
 
     Args:
-        sp_client: Authenticated spotipy client instance.
+        sp_client: Authenticated spotipy client instance (using client credentials).
         artist_id (str): Spotify ID of the main artist.
         artist_name (str): Name of the main artist.
         artist_genres (list): List of genres for the main artist.
@@ -20,6 +22,7 @@ def fetch_similar_genre_artists_data(sp_client, artist_id, artist_name, artist_g
         list: A list of simplified artist dictionaries (id, name, genres, etc.)
               sorted by popularity, or an empty list on error/no results.
     """
+    # Function body remains the same...
     if not sp_client:
         print("[Similar Fetch] Error: Invalid Spotify client provided.")
         return []
@@ -35,12 +38,6 @@ def fetch_similar_genre_artists_data(sp_client, artist_id, artist_name, artist_g
     max_results_per_genre = 20 # Fetch more initially to get better variety
 
     try:
-        # Use recommendations endpoint if possible, fallback to search
-        # recommendations = sp_client.recommendations(seed_genres=genres_to_search, seed_artists=[artist_id], limit=limit * 2)
-        # if recommendations and recommendations.get('tracks'):
-        #     # Process recommendations (extract unique artists) - More complex logic needed here
-        #     pass # Placeholder - Recommendation logic needs careful implementation
-
         # Fallback/Simpler method: Search by genre
         print("[Similar Fetch] Using genre search method.")
         for genre in genres_to_search:
@@ -69,10 +66,10 @@ def fetch_similar_genre_artists_data(sp_client, artist_id, artist_name, artist_g
 
     except spotipy.exceptions.SpotifyException as e:
         print(f"[Similar Fetch] Spotify API error: {e}")
-        # Don't flash here, let the calling route handle UI messages
-        if e.http_status == 401:
-            print("-> Token likely expired during similar artist fetch.")
-            session.clear() # Clear session on auth error
+        # Client credentials errors might indicate wrong ID/Secret
+        if e.http_status == 401 or e.http_status == 403:
+            print("-> Authorization error during similar artist fetch. Check Client ID/Secret.")
+            # No session to clear here
         return []
     except Exception as e:
         print(f"[Similar Fetch] Unexpected error: {e}")
@@ -92,6 +89,7 @@ def fetch_release_details(sp_client, releases_simplified):
     Returns:
         list: List of full release detail objects, including paginated tracks.
     """
+    # Function body remains the same...
     if not sp_client:
         print("[Release Details] Error: Invalid Spotify client provided.")
         return []
@@ -115,6 +113,7 @@ def fetch_release_details(sp_client, releases_simplified):
         batch_ids = release_ids[i:i + batch_size]
         try:
             print(f"  Fetching album batch {i//batch_size + 1} (IDs: {batch_ids})...")
+            # Use the passed client 'sp_client'
             results = sp_client.albums(batch_ids)
             if results and results.get('albums'):
                 count = 0
@@ -125,17 +124,16 @@ def fetch_release_details(sp_client, releases_simplified):
                 print(f"    Successfully fetched details for {count} albums in this batch.")
             else:
                 print(f"    Warning: No album data returned for batch IDs: {batch_ids}")
-                # Add placeholders if needed, or just skip
                 for bid in batch_ids:
                     if bid not in fetched_albums_map:
                          fetched_albums_map[bid] = {'id': bid, 'name': 'Error Fetching', 'error': True, 'tracks': {'items': []}}
 
         except spotipy.exceptions.SpotifyException as e:
             print(f"    Spotify API error fetching album batch: {e}")
-            if e.http_status == 401:
-                print("    -> Token likely expired during batch album fetch. Aborting.")
-                session.clear()
-                return [] # Abort if token expires
+            if e.http_status == 401 or e.http_status == 403:
+                print("    -> Authorization error during batch album fetch. Check Client ID/Secret. Aborting.")
+                # No session to clear, just abort
+                return [] # Abort if auth fails
             # Mark failed IDs
             for bid in batch_ids:
                  if bid not in fetched_albums_map:
@@ -155,7 +153,6 @@ def fetch_release_details(sp_client, releases_simplified):
         return []
 
     # 2. For each fetched album, paginate through ALL its tracks
-    #    (Audio Features are NOT fetched here)
     print("[Release Details] Fetching all tracks for each release (Audio Features SKIPPED)...")
     overall_start_time_tracks = time.time()
     processed_releases = []
@@ -175,78 +172,74 @@ def fetch_release_details(sp_client, releases_simplified):
         release_name = release_details.get('name', 'Unknown Release')
         print(f"  Processing tracks for: '{release_name}' ({release_id})")
 
-        # Ensure tracks structure exists
         if 'tracks' not in release_details or not isinstance(release_details['tracks'], dict):
             release_details['tracks'] = {'items': [], 'next': None} # Initialize if missing
 
         all_tracks_this_release = []
-        tracks_pager = release_details['tracks'] # Start with the tracks from the album object
+        tracks_pager = release_details['tracks']
 
-        # Add initial tracks
         if tracks_pager and tracks_pager.get('items'):
             all_tracks_this_release.extend(tracks_pager['items'])
 
-        # Try getting a fresh client before pagination, handles potential token refresh during long process
-        current_sp = get_spotify_client()
-        if not current_sp:
-             print(f"    FATAL: Cannot get Spotify client for track pagination on '{release_name}'. Aborting detail fetch.")
-             # Mark remaining as errors or return partially processed list? Returning partial seems better.
-             # Add error marker to current release
-             release_details['tracks_error'] = "Client unavailable for pagination"
-             processed_releases.append(release_details)
-             return processed_releases # Return what we have so far
+        # Get a client instance for pagination. Since client credentials tokens
+        # are longer-lived and managed by the manager, using the initial sp_client
+        # passed to this function is generally acceptable. If token expiry during
+        # a long pagination becomes an issue, we might need to re-get the client.
+        # For now, let's use the provided sp_client for pagination.
+        current_sp = sp_client
+        # ---- Alternative: Re-fetch client if needed ----
+        # current_sp = get_spotify_client_credentials_client()
+        # if not current_sp:
+        #      print(f"    FATAL: Cannot get Spotify client for track pagination on '{release_name}'. Aborting.")
+        #      release_details['tracks_error'] = "Client unavailable for pagination"
+        #      processed_releases.append(release_details)
+        #      return processed_releases
+        # ---- End Alternative ----
 
-        # Paginate if 'next' URL exists
-        page_num = 1
-        retries = 0
-        max_retries = 2
+        page_num = 1; retries = 0; max_retries = 2
         while tracks_pager and tracks_pager.get('next') and retries <= max_retries:
             page_num += 1
             print(f"    Fetching track page {page_num} for '{release_name}'...")
             try:
-                time.sleep(0.1) # Small delay before next request
+                time.sleep(0.1)
+                # Use the client obtained for pagination
                 tracks_pager = current_sp.next(tracks_pager)
                 if tracks_pager and tracks_pager.get('items'):
                    all_tracks_this_release.extend(tracks_pager['items'])
                    retries = 0 # Reset retries on success
                 else:
-                    # If pager becomes None or items are missing, stop pagination
                     print(f"    No more items found on page {page_num} or pager became invalid.")
                     tracks_pager = None # Ensure loop terminates
             except spotipy.exceptions.SpotifyException as e:
                 print(f"    Spotify API error fetching next track page ({page_num}): {e}")
-                if e.http_status == 401:
-                    print("    --> Token likely expired during track pagination. Aborting detail fetch.")
-                    session.clear()
-                    release_details['tracks_error'] = "Token expired during pagination"
+                if e.http_status == 401 or e.http_status == 403:
+                    print("    --> Authorization error during track pagination. Check Client ID/Secret. Aborting.")
+                    release_details['tracks_error'] = "Authorization error during pagination"
                     processed_releases.append(release_details)
                     return processed_releases # Abort
                 elif e.http_status == 429: # Rate limit
                      wait_time = int(e.headers.get('Retry-After', 2)) + 1
                      print(f"    Rate limited. Waiting {wait_time} seconds...")
                      time.sleep(wait_time)
-                     retries += 1
-                     print(f"    Retrying page {page_num} (Attempt {retries}/{max_retries})")
+                     retries += 1; print(f"    Retrying page {page_num} (Attempt {retries}/{max_retries})")
                 else:
-                     release_details['tracks_error'] = f"API Error on page {page_num}: {e.msg}"
-                     tracks_pager = None # Stop pagination on other errors
-                     break # Exit loop
+                     release_details['tracks_error'] = f"API Error page {page_num}: {e.msg}"
+                     tracks_pager = None; break
             except Exception as e:
                 print(f"    Unexpected error fetching next track page ({page_num}): {e}")
                 traceback.print_exc()
-                release_details['tracks_error'] = f"Unexpected error on page {page_num}"
-                tracks_pager = None # Stop pagination
-                break # Exit loop
+                release_details['tracks_error'] = f"Unexpected error page {page_num}"
+                tracks_pager = None; break
 
-        # Update the release details with the full track list
         release_details['tracks']['items'] = all_tracks_this_release
-        release_details['tracks'].pop('next', None) # Remove 'next' as we've fetched all
-        release_details['total_tracks_fetched'] = len(all_tracks_this_release) # Add our count
+        release_details['tracks'].pop('next', None)
+        release_details['total_tracks_fetched'] = len(all_tracks_this_release)
         print(f"    Collected {len(all_tracks_this_release)} total tracks for '{release_name}'.")
-
 
         processed_releases.append(release_details)
         print(f"  Finished processing '{release_name}' in {time.time() - single_release_start_time:.2f}s")
 
     print(f"[Release Details] Finished fetching all tracks (Audio Features SKIPPED) in {time.time() - overall_start_time_tracks:.2f}s.")
     return processed_releases
+
+# --- END OF FILE app/spotify/data.py ---

@@ -3,23 +3,13 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{% block title %}Spotify Artist Dashboard{% endblock %}</title>
+        <title>{% block title %}Spotify Artist Metrics{% endblock %}</title>
         <script src="https://cdn.tailwindcss.com"></script>
-        {# --- REMOVED Chart.js CDN --- #}
-        {# <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> #}
         <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
         <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Spotify_logo_without_text.svg/2048px-Spotify_logo_without_text.svg.png" type="image/png">
         <style>
-            /* Styles for loader, details/summary accordion */
-            .loader { /* Keep or replace with SVG */
-                border: 4px solid #4b5563; /* gray-600 */
-                border-top: 4px solid #1DB954; /* Spotify Green */
-                border-radius: 50%;
-                width: 30px;
-                height: 30px;
-                animation: spin 1s linear infinite;
-                margin: 20px auto;
-            }
+            /* Styles for loader, details/summary accordion, scrollbar */
+            .loader { border: 4px solid #4b5563; border-top: 4px solid #1DB954; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
             .svg-loader { width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
             @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
             details > summary { cursor: pointer; list-style: none; padding: 0.75rem 1rem; background-color: #374151; border-radius: 0.25rem; transition: background-color 0.2s; }
@@ -28,33 +18,29 @@
             details > summary:hover { background-color: #4b5563; }
             details[open] > summary { background-color: #1f2937; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid #4b5563; }
             details > div { padding: 1rem; background-color: #1f2937; border-bottom-left-radius: 0.25rem; border-bottom-right-radius: 0.25rem; border-top: none; }
-            /* REMOVED: Chart container style (no longer needed) */
-            /* .chart-container { ... } */
+            /* Add scrollbar styles from styles.css if needed inline, or rely on linked CSS */
         </style>
-        {% block extra_css %}{% endblock %} {# <--- ADD THIS BLOCK #}
+        {% block extra_css %}{% endblock %}
     </head>
 <body class="bg-gray-900 text-white font-sans">
     <nav class="bg-gray-800 p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center flex-wrap">
-            <a href="/" class="text-xl md:text-2xl font-bold text-green-500 mb-2 md:mb-0">🎵 Spotify Artist Metrics</a>
+            {# Link brand to search page #}
+            <a href="{{ url_for('main.search_artist') }}" class="text-xl md:text-2xl font-bold text-green-500 mb-2 md:mb-0">🎵 Spotify Artist Metrics</a>
             <div class="flex flex-wrap justify-center md:justify-end items-center">
-                {% if session.get('token_info') %}
-                <a href="{{ url_for('main.artist_dashboard') }}" class="px-3 py-1 md:px-4 md:py-2 text-sm md:text-base text-gray-300 hover:text-white">My Artist</a>
-                <a href="{{ url_for('main.similar_genre_artists') }}" class="px-3 py-1 md:px-4 md:py-2 text-sm md:text-base text-gray-300 hover:text-white">Similar Genres</a>
-                <!-- MODIFIED LINK -->
-                <a href="{{ url_for('playlists.playlist_finder') }}" class="px-3 py-1 md:px-4 md:py-2 text-sm md:text-base text-gray-300 hover:text-white">Find Playlists</a>
+                {# Main navigation links - Simplified #}
+                {# Links to similar/playlist only make sense *after* a search, handled on search page #}
                 <a href="{{ url_for('main.search_artist') }}" class="px-3 py-1 md:px-4 md:py-2 text-sm md:text-base text-gray-300 hover:text-white">Search Artist</a>
-                <a href="{{ url_for('main.logout') }}" class="ml-2 px-3 py-1 md:px-4 md:py-2 text-sm md:text-base text-gray-300 hover:text-white bg-red-600 rounded hover:bg-red-700">Logout</a>
-            {% else %}
-                <a href="{{ url_for('main.login') }}" class="px-4 py-2 bg-green-500 rounded hover:bg-green-600">Login with Spotify</a>
-            {% endif %}
+                {# Add other global links here if needed later #}
 
+                {# Removed Login/Logout - No user session needed for core features #}
+                {# {% if session.get('token_info') %} ... {% else %} ... {% endif %} #}
             </div>
         </div>
     </nav>
 
     <main class="container mx-auto mt-8 p-4">
-        {# Flash Message Display (unchanged) #}
+        {# Flash Message Display (Unchanged) #}
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             <div class="mb-4">
@@ -76,13 +62,12 @@
     </main>
 
     <footer class="text-center text-gray-500 mt-10 pb-5">
-        <p>© 2024 Spotify Artist Metrics. MIT License.</p> {# Update year/name if needed #}
-        <p class="text-xs mt-1">Adapted for Spotify API Changes (Nov 2024).</p>
+        <p>© 2024 Spotify Artist Metrics. MIT License.</p>
+        {# Removed adaptation note unless specifically needed #}
+        {# <p class="text-xs mt-1">Adapted for Spotify API Changes (Nov 2024).</p> #}
     </footer>
 
-    {# --- REMOVED: Chart initialization script --- #}
-    {# <script> ... initializeRadarCharts() ... </script> #}
-    {% block extra_js %}{% endblock %} {# <--- ADD THIS BLOCK if missing #}
+    {% block extra_js %}{% endblock %}
 
 </body>
 </html>

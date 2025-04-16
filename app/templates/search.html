@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Search Artist - Spotify Dashboard{% endblock %}
+{% block title %}
+    {% if main_artist %}
+        {{ main_artist.name }} - Artist Metrics
+    {% else %}
+        Search Artist - Spotify Metrics
+    {% endif %}
+{% endblock %}
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-6 text-center">Search for an Artist</h1>
@@ -16,23 +22,39 @@
 {# Display Search Results #}
 {% if search_performed %}
     {% if main_artist %}
+        {# Artist Found - Display Details using Partial #}
         <h2 class="text-2xl font-bold mb-4 text-center text-green-300">Search Result: {{ main_artist.name }}</h2>
 
-        {# Set variables for the partial - now includes top_tracks and release_stats #}
+        {# Links to related pages - ONLY show if artist found #}
+        <div class="text-center mb-8 flex flex-wrap justify-center gap-4">
+             <a href="{{ url_for('main.similar_genre_artists', artist_id=main_artist.id) }}" class="inline-block px-6 py-2 bg-blue-500 rounded text-lg font-semibold hover:bg-blue-600 transition duration-300">
+                View Similar Genre Artists
+             </a>
+             <a href="{{ url_for('playlists.playlist_finder', artist_id=main_artist.id) }}" class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300">
+                Find Playlists for Artist
+             </a>
+        </div>
+
+        {# Set variables for the partial #}
         {% set display_artist = main_artist %}
         {% set display_releases = main_artist_releases %}
-        {% set top_tracks = top_tracks %} {# Pass top_tracks from route #}
-        {% set release_stats = release_stats %} {# Pass release_stats from route #}
+        {% set top_tracks = top_tracks %}
+        {% set release_stats = release_stats %}
 
-
-        {# Include the partial #}
+        {# Include the partial to display artist info #}
         {% include '_artist_display.html' %}
 
-        {# Removed Related Artists Section remains removed #}
-
-    {% else %} {# No main_artist found #}
-        <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl"><h2 class="text-2xl font-semibold mb-4">No Artist Found</h2><p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p></div>
+    {% else %} {# No main_artist found for the query #}
+        <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+            <h2 class="text-2xl font-semibold mb-4">No Artist Found</h2>
+            <p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p>
+        </div>
     {% endif %}
+{% else %}
+    {# Initial state before search #}
+    <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
+        <p class="text-gray-400">Enter an artist name above to view their metrics.</p>
+    </div>
 {% endif %} {# end search_performed #}
 
 {% endblock %}
