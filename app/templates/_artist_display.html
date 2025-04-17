@@ -1,14 +1,15 @@
-{# --- templates/_artist_display.html --- #}
+{# --- START OF (REVISED) FILE templates/_artist_display.html --- #}
 {# Expects:
     'display_artist' (full artist object),
     'display_releases' (list of FULL album objects),
     'top_tracks' (list of track objects, optional),
-    'release_stats' (dict of calculated stats, optional)
+    'release_stats' (dict of calculated stats, optional),
+    'lastfm_tags' (list of tag strings, optional, PASSED FROM search.html)
 #}
 
 {% if display_artist %}
 {# --- Artist Header --- #}
-<div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden md:flex mb-6"> {# Reduced bottom margin #}
+<div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden md:flex mb-6">
     <div class="md:w-1/3">
         {% if display_artist.images %}
             <img src="{{ display_artist.images[0].url }}" alt="{{ display_artist.name }} Profile Picture" class="object-cover w-full h-full">
@@ -26,10 +27,60 @@
             <div class="bg-gray-700 p-4 rounded"><p class="text-sm text-gray-400 uppercase">Followers</p>{% if display_artist.followers and display_artist.followers.total is not none %}<p class="text-2xl font-semibold">{{ "{:,}".format(display_artist.followers.total) }}</p>{% else %}<p class="text-2xl font-semibold text-gray-500">N/A</p>{% endif %}</div>
             <div class="bg-gray-700 p-4 rounded"><p class="text-sm text-gray-400 uppercase">Current Popularity</p>{% if display_artist.popularity is not none %}<p class="text-2xl font-semibold">{{ display_artist.popularity }} / 100</p><div class="w-full bg-gray-600 rounded-full h-2.5 mt-1"><div class="bg-green-500 h-2.5 rounded-full" style="width: {{ display_artist.popularity }}%"></div></div>{% else %}<p class="text-2xl font-semibold text-gray-500">N/A</p><div class="w-full bg-gray-600 rounded-full h-2.5 mt-1"><div class="bg-gray-500 h-2.5 rounded-full" style="width: 0%"></div></div>{% endif %}</div>
         </div>
-        {# --- Genres --- #}
-        {% if display_artist.genres %}<div class="mb-4"><p class="text-sm text-gray-400 uppercase mb-1">Genres</p><div class="flex flex-wrap gap-2">{% for genre in display_artist.genres %}<span class="bg-gray-600 text-gray-200 px-3 py-1 rounded-full text-sm">{{ genre }}</span>{% endfor %}</div></div>{% endif %}
+
+        {# --- Genres & Tags --- #}
+        {# Combine Spotify genres and Last.fm tags #}
+        {% set spotify_genres_lower = (display_artist.genres or []) | map('lower') | list %}
+        {% set lastfm_tags_lower = (lastfm_tags or []) | map('lower') | list %} {# Lowercase tags directly #}
+        {# Create a combined set for uniqueness, then convert back to list and sort #}
+        {% set combined_tags = (spotify_genres_lower + lastfm_tags_lower) | unique | sort %}
+
+        {% if combined_tags %}
+        <div class="mb-4">
+            <p class="text-sm text-gray-400 uppercase mb-1">Genres & Tags</p>
+            <div class="flex flex-wrap gap-2">
+                {% for tag in combined_tags %}
+                    {# Optionally style differently based on source #}
+                    {% if tag in spotify_genres_lower and tag in lastfm_tags_lower %}
+                        {# In both #}
+                        <span class="bg-green-700 text-green-100 px-3 py-1 rounded-full text-sm" title="Genre (Spotify) & Tag (Last.fm)">{{ tag }}</span>
+                    {% elif tag in spotify_genres_lower %}
+                         {# Only Spotify #}
+                        <span class="bg-green-600 text-green-100 px-3 py-1 rounded-full text-sm" title="Genre (Spotify)">{{ tag }}</span>
+                    {% elif tag in lastfm_tags_lower %}
+                         {# Only Last.fm #}
+                         <span class="bg-red-700 text-red-100 px-3 py-1 rounded-full text-sm" title="Tag (Last.fm)">{{ tag }}</span>
+                    {% else %}
+                         {# Should not happen, but fallback #}
+                         <span class="bg-gray-600 text-gray-200 px-3 py-1 rounded-full text-sm">{{ tag }}</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Spotify genres <span class="inline-block w-2 h-2 rounded-full bg-green-600 ml-1 mr-2"></span> Last.fm tags <span class="inline-block w-2 h-2 rounded-full bg-red-700 ml-1"></span></p>
+        </div>
+        {% elif display_artist.genres %} {# Fallback if only Spotify genres exist #}
+         <div class="mb-4">
+             <p class="text-sm text-gray-400 uppercase mb-1">Genres (Spotify)</p>
+             <div class="flex flex-wrap gap-2">
+                 {% for genre in display_artist.genres %}
+                     <span class="bg-green-600 text-green-100 px-3 py-1 rounded-full text-sm">{{ genre }}</span>
+                 {% endfor %}
+             </div>
+         </div>
+         {% elif lastfm_tags %} {# Fallback if only Last.fm tags exist #}
+         <div class="mb-4">
+             <p class="text-sm text-gray-400 uppercase mb-1">Tags (Last.fm)</p>
+             <div class="flex flex-wrap gap-2">
+                 {% for tag in lastfm_tags %}
+                     <span class="bg-red-700 text-red-100 px-3 py-1 rounded-full text-sm">{{ tag }}</span>
+                 {% endfor %}
+             </div>
+         </div>
+         {% endif %} {# End combined_tags check #}
+
     </div>
 </div>
+
 
 {# --- NEW: Top Tracks & Release Stats Section --- #}
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
