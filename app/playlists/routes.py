@@ -3,23 +3,26 @@ import os
 import time
 import json
 import traceback
+import smtplib
+from email.message import EmailMessage
 from flask import (
     render_template, redirect, url_for, flash, request, Response,
     stream_with_context, jsonify, current_app
 )
 import spotipy
+import random # Ensure random is imported for delays
 
 from . import playlists_bp
 from ..spotify.auth import get_spotify_client_credentials_client
 from ..spotify.data import fetch_similar_artists_by_genre
 from ..spotify.utils import parse_follower_count
-# ***** Import Last.fm scrapers *****
-from ..lastfm.scraper import scrape_lastfm_tags, scrape_lastfm_upcoming_events # Import tag scraper too
+from ..lastfm.scraper import scrape_lastfm_tags, scrape_lastfm_upcoming_events
 from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply
-from .email import generate_email_content, send_single_email, format_error_message
+from .email import generate_email_template_and_preview, format_error_message
 
 
-@playlists_bp.route('/playlist-finder/<artist_id>', methods=['GET'])
+# ***** FIX: Add explicit endpoint name *****
+@playlists_bp.route('/playlist-finder/<artist_id>', methods=['GET'], endpoint='show_playlist_finder')
 def playlist_finder(artist_id):
     sp = get_spotify_client_credentials_client()
     if not sp:
@@ -29,7 +32,8 @@ def playlist_finder(artist_id):
         flash('No artist ID provided for playlist finding.', 'error')
         return redirect(url_for('main.search_artist'))
 
-    # Fetch artist details first (needed for name regardless of search)
+    # (Rest of the playlist_finder function remains exactly the same as the previous step)
+    # ... try block to fetch artist details ...
     try:
         print(f"[PlaylistFinder] Fetching details for artist ID: {artist_id}")
         artist = sp.artist(artist_id)
@@ -45,290 +49,184 @@ def playlist_finder(artist_id):
         traceback.print_exc()
         return redirect(url_for('main.search_artist'))
 
-    # Get parameters from request query string
     selected_track_id = request.args.get('selected_track_id')
-    song_description_from_req = request.args.get('song_description', '')
+    # REMOVED: song_description_from_req = request.args.get('song_description', '')
     user_keywords_raw = request.args.get('user_keywords', '')
     search_performed = bool(selected_track_id)
 
-    # --- Generator Function for Streaming HTTP Response ---
     def generate_response():
         top_tracks = []
         selected_track_name = None
         market = 'US'
-        lastfm_tags = [] # Initialize Last.fm tags list
+        lastfm_tags = []
 
-        # --- Part 1: Render Initial Page Structure (always runs) ---
         try:
-            # Fetch top tracks for the selection form
             print(f"[PlaylistFinder Stream] Fetching top tracks for {artist_name} ({artist_id})...")
             top_tracks_result = sp.artist_top_tracks(artist_id, country=market)
             top_tracks = top_tracks_result.get('tracks', []) if top_tracks_result else []
             print(f"[PlaylistFinder Stream]   Found {len(top_tracks)} top tracks.")
 
-            # ***** Fetch Last.fm Tags (even before search starts, using artist_name) *****
-            # This happens early, providing tags context immediately if possible
             print(f"[PlaylistFinder Stream] Fetching Last.fm tags for {artist_name}...")
             tags_result = scrape_lastfm_tags(artist_name)
-            if tags_result is None:
-                 print("[PlaylistFinder Stream]  -> Warning: Error occurred fetching Last.fm tags.")
-                 # Don't flash here, stream already started. Log is sufficient.
-                 lastfm_tags = []
-            else:
-                 lastfm_tags = tags_result
-                 print(f"[PlaylistFinder Stream]  -> Found {len(lastfm_tags)} Last.fm tags: {lastfm_tags[:10]}") # Log first few
+            lastfm_tags = tags_result if tags_result is not None else []
+            if tags_result is None: print("[PlaylistFinder Stream]  -> Warning: Error occurred fetching Last.fm tags.")
+            else: print(f"[PlaylistFinder Stream]  -> Found {len(lastfm_tags)} Last.fm tags: {lastfm_tags[:10]}")
 
         except Exception as e:
             print(f"[PlaylistFinder Stream] Error during initial data fetch (tracks/tags): {e}")
             traceback.print_exc()
-            # Proceed even if tracks/tags fail, form might still work
 
-        # Yield the initial HTML structure (pass fetched tags)
         yield render_template('playlist_finder_base.html',
-                              artist_id=artist_id,
-                              artist_name=artist_name,
-                              artist_genres=artist_genres, # Spotify genres
-                              lastfm_tags=lastfm_tags,     # ***** Pass Last.fm tags *****
-                              top_tracks=top_tracks,
-                              selected_track_id=selected_track_id,
-                              song_description=song_description_from_req,
-                              user_keywords=user_keywords_raw,
-                              search_performed=search_performed,
-                              loading=search_performed,
-                              playlists=None,
-                              global_error=None)
+                              artist_id=artist_id, artist_name=artist_name, artist_genres=artist_genres,
+                              lastfm_tags=lastfm_tags, top_tracks=top_tracks, selected_track_id=selected_track_id,
+                              user_keywords=user_keywords_raw, # song_description removed
+                              search_performed=search_performed, loading=search_performed, playlists=None, global_error=None)
 
-        # --- Part 2: Perform Search and Stream Results (only if track selected) ---
         if not search_performed:
             print("[PlaylistFinder Stream] No track selected, stopping stream.")
             return
 
-        # --- Search Logic ---
-        final_playlists = {}
-        keywords_list = []
-        ps_session = None
-        has_scrape_error = False
-        global_error_message = None
-
+        final_playlists = {}; keywords_list = []; ps_session = None; has_scrape_error = False; global_error_message = None
         try:
-            # Step 2.1: Get Selected Track Details
             print(f"[PlaylistFinder Stream] Search requested for track ID: {selected_track_id}")
             if not selected_track_id: raise ValueError("Selected track ID is missing.")
             selected_track = sp.track(selected_track_id, market=market)
             if not selected_track: raise ValueError(f"Track ID '{selected_track_id}' not found.")
-            selected_track_name = selected_track['name']
-            track_artist_name = selected_track['artists'][0]['name'] if selected_track['artists'] else artist_name
+            selected_track_name = selected_track['name']; track_artist_name = selected_track['artists'][0]['name'] if selected_track['artists'] else artist_name
             print(f"[PlaylistFinder Stream] Selected track: '{selected_track_name}' by {track_artist_name}")
-            js_safe_track_name = json.dumps(selected_track_name)
-            yield f'<script>document.title = "Searching playlists for " + {js_safe_track_name} + "...";</script>\n'
+            js_safe_track_name = json.dumps(selected_track_name); yield f'<script>document.title = "Searching playlists for " + {js_safe_track_name} + "...";</script>\n'
 
-            # Step 2.2: Fetch Similar Artists (for keywords) - Use fetched artist context
             print("[PlaylistFinder Stream] Fetching similar genre artists for keywords...")
             similar_artists = fetch_similar_artists_by_genre(sp, artist_id, artist_name, artist_genres)
 
-            # ***** Step 2.3: Generate Keywords (Include Last.fm Tags) *****
-            keywords = set()
-            # Add artist names
-            keywords.add(track_artist_name.lower())
-            keywords.add(artist_name.lower())
-            # Add track name + artist
-            keywords.add(f"{selected_track_name.lower()} {track_artist_name.lower()}")
-            # Add Spotify genres
-            for genre in artist_genres[:5]: # Use up to 5 Spotify genres
-                 keywords.add(genre.lower().strip())
-            # ***** Add Last.fm tags *****
-            for tag in lastfm_tags[:10]: # Use up to 10 Last.fm tags
-                 keywords.add(tag.lower().strip()) # Already lowercased in scraper, but be sure
-            # Add user keywords
-            user_kws = [kw.strip().lower() for kw in user_keywords_raw.split(',') if kw.strip()]
+            keywords = set(); keywords.add(track_artist_name.lower()); keywords.add(artist_name.lower()); keywords.add(f"{selected_track_name.lower()} {track_artist_name.lower()}")
+            for genre in artist_genres[:5]: keywords.add(genre.lower().strip())
+            for tag in lastfm_tags[:10]: keywords.add(tag.lower().strip())
+            user_kws = [kw.strip().lower() for kw in user_keywords_raw.split(',') if kw.strip()];
             for kw in user_kws: keywords.add(kw)
-            # Add similar artist names
             for sim_artist in similar_artists: keywords.add(sim_artist["name"].lower())
-
-            keywords_list = sorted(list(filter(None, keywords))) # Filter empty and sort
+            keywords_list = sorted(list(filter(None, keywords)))
             if not keywords_list: raise ValueError("No valid keywords generated.")
             print(f"[PlaylistFinder Stream] Generated {len(keywords_list)} keywords: {keywords_list}")
-            total_keywords = len(keywords_list)
-            # Yield JS to update UI with keywords used (optional, shown below)
-            js_keywords_preview = json.dumps(keywords_list[:8]) # Show first few
-            yield f'<script>updateKeywordsDisplay({js_keywords_preview});</script>\n'
+            total_keywords = len(keywords_list); js_keywords_preview = json.dumps(keywords_list[:8]); yield f'<script>updateKeywordsDisplay({js_keywords_preview});</script>\n'
 
-
-            # Step 2.4: Credentials & Login
-            ps_user = current_app.config.get('PLAYLIST_SUPPLY_USER')
-            ps_pass = current_app.config.get('PLAYLIST_SUPPLY_PASS')
+            ps_user = current_app.config.get('PLAYLIST_SUPPLY_USER'); ps_pass = current_app.config.get('PLAYLIST_SUPPLY_PASS')
             if not ps_user or not ps_pass: raise ValueError("PlaylistSupply credentials missing.")
-            yield f'<script>updateProgress(5, "Logging in...");</script>\n'
-            ps_session = login_to_playlistsupply(ps_user, ps_pass)
+            yield f'<script>updateProgress(5, "Logging in...");</script>\n'; ps_session = login_to_playlistsupply(ps_user, ps_pass)
             if not ps_session: raise ConnectionError("Failed to log in to PlaylistSupply.")
 
-            # Step 2.5: Scrape Playlists
             processed_keywords = 0; initial_progress = 10; scrape_progress_range = 80
             for keyword in keywords_list:
-                processed_keywords += 1
-                progress = initial_progress + int((processed_keywords / total_keywords) * scrape_progress_range)
-                js_keyword = json.dumps(keyword); yield f'<script>updateProgress({progress}, "Searching: " + {js_keyword});</script>\n'
-                print(f"  Scraping '{keyword}' ({processed_keywords}/{total_keywords})")
-                scrape_result = scrape_playlistsupply(keyword, ps_user, ps_session)
-                time.sleep(0.4) # Keep delay between scrapes
-
+                processed_keywords += 1; progress = initial_progress + int((processed_keywords / total_keywords) * scrape_progress_range); js_keyword = json.dumps(keyword); yield f'<script>updateProgress({progress}, "Searching: " + {js_keyword});</script>\n'
+                print(f"  Scraping '{keyword}' ({processed_keywords}/{total_keywords})"); scrape_result = scrape_playlistsupply(keyword, ps_user, ps_session); time.sleep(0.4)
                 if scrape_result is None: has_scrape_error = True; continue
                 elif isinstance(scrape_result, dict) and "error" in scrape_result:
-                    has_scrape_error = True
-                    error_info = scrape_result.get("message", scrape_result.get("error"))
-                    print(f"  -> Scrape error for '{keyword}': {error_info}")
-                    # Display error in progress bar?
-                    # yield f'<script>updateProgress({progress}, "Error: {js_keyword}");</script>\n'
-                    if scrape_result.get("error") == "session_invalid":
-                         global_error_message = "PlaylistSupply Session Invalid/Expired. Please restart app/check credentials."; break
-                    continue # Continue with next keyword on non-session errors
+                    has_scrape_error = True; error_info = scrape_result.get("message", scrape_result.get("error")); print(f"  -> Scrape error for '{keyword}': {error_info}")
+                    if scrape_result.get("error") == "session_invalid": global_error_message = "PlaylistSupply Session Invalid/Expired."; break
+                    continue
                 elif isinstance(scrape_result, list):
                     count = 0
                     for pl in scrape_result:
-                        if isinstance(pl, dict) and pl.get('url') and 'open.spotify.com/playlist/' in pl['url'] and pl['url'] not in final_playlists:
-                            final_playlists[pl['url']] = pl
-                            count += 1
-                    # print(f"    -> Added {count} new unique playlists.")
-                else:
-                    # Unexpected result type
-                    print(f"  -> Unexpected scrape result type for '{keyword}': {type(scrape_result)}")
-                    has_scrape_error = True
+                        if isinstance(pl, dict) and pl.get('url') and 'open.spotify.com/playlist/' in pl['url'] and pl['url'] not in final_playlists: final_playlists[pl['url']] = pl; count += 1
+                else: print(f"  -> Unexpected scrape result type for '{keyword}': {type(scrape_result)}"); has_scrape_error = True
+            if global_error_message: raise ConnectionError(global_error_message)
 
-            if global_error_message: # If session became invalid, stop processing
-                 raise ConnectionError(global_error_message)
-
-            # Step 2.6: Sort Results
             sorted_playlists = []
-            if final_playlists:
-                yield f'<script>updateProgress(95, "Sorting results...");</script>\n'
-                sorted_playlists = sorted(list(final_playlists.values()), key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
+            if final_playlists: yield f'<script>updateProgress(95, "Sorting results...");</script>\n'; sorted_playlists = sorted(list(final_playlists.values()), key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
             print(f"[PlaylistFinder Stream] Aggregated {len(final_playlists)} unique playlists. Sorted {len(sorted_playlists)}.")
 
-            # Step 2.7: Render Results HTML
-            results_html = render_template('playlist_finder_results.html',
-                                           selected_track_name=selected_track_name,
-                                           playlists=sorted_playlists,
-                                           has_scrape_error=has_scrape_error,
-                                           search_performed=True,
-                                           global_error=None) # Global error handled via exception now
+            results_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=sorted_playlists, has_scrape_error=has_scrape_error, search_performed=True, global_error=None)
+            js_escaped_html = json.dumps(results_html); js_escaped_playlist_data = json.dumps(sorted_playlists); js_safe_final_title = json.dumps(f"Playlist Results for {selected_track_name}"); yield f'<script>injectResultsAndData({js_escaped_html}, {js_escaped_playlist_data}); document.title = {js_safe_final_title}; hideProgress();</script>\n'
 
-            # Step 2.8: Yield JS Injection
-            js_escaped_html = json.dumps(results_html)
-            js_escaped_playlist_data = json.dumps(sorted_playlists)
-            js_safe_final_title = json.dumps(f"Playlist Results for {selected_track_name}")
-            yield f'<script>injectResultsAndData({js_escaped_html}, {js_escaped_playlist_data}); document.title = {js_safe_final_title}; hideProgress();</script>\n'
-
-        # --- Error Handling ---
         except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e:
-            error_occurred = str(e); print(f"[PlaylistFinder Stream] Error: {error_occurred}")
-            js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Playlist Search Error: " + {js_safe_error});</script>\n'
-            error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred)
-            js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
+            error_occurred = str(e); print(f"[PlaylistFinder Stream] Error: {error_occurred}"); js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Playlist Search Error: " + {js_safe_error});</script>\n'; error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred); js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
         except Exception as e:
-            error_occurred = f"Unexpected error: {str(e)}"; print(f"[PlaylistFinder Stream] Unexpected Error: {e}"); traceback.print_exc()
-            js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Unexpected Error: " + {js_safe_error});</script>\n'
-            error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred)
-            js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
+            error_occurred = f"Unexpected error: {str(e)}"; print(f"[PlaylistFinder Stream] Unexpected Error: {e}"); traceback.print_exc(); js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Unexpected Error: " + {js_safe_error});</script>\n'; error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred); js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
         finally:
-            # Ensure progress is hidden even if errors occurred before final JS injection
             yield f'<script>hideProgress();</script>\n'
-
-    # Return the streaming response
     return Response(stream_with_context(generate_response()), mimetype='text/html')
 
-# --- Email Related Routes (Modified to use Client Credentials Client) ---
 
 @playlists_bp.route('/generate-preview-email', methods=['POST'])
 def generate_preview_email_route():
-    # Use Client Credentials client if Spotify interaction is needed
+    # ... (No changes needed here from previous step) ...
     sp = get_spotify_client_credentials_client()
-    if not sp:
-        # Cannot rely on flash here as it's an API endpoint
-        return jsonify({"error": "Spotify API client failed to initialize."}), 503 # Service Unavailable
-
-    # Rest of the logic remains the same, using the 'sp' client obtained above
+    if not sp: return jsonify({"error": "Spotify API client failed to initialize."}), 503
     if not current_app.config.get('GEMINI_API_KEY'): return jsonify({"error": "AI API Key is not configured."}), 500
-    data = request.get_json(); # ... (validation as before) ...
+    data = request.get_json();
     if not data: return jsonify({"error": "Missing request data."}), 400
-    track_id = data.get('track_id'); song_description = data.get('song_description'); playlist = data.get('playlist')
-    if not track_id or not song_description or not playlist or not isinstance(playlist, dict): return jsonify({"error": "Missing required fields."}), 400
-
+    track_id = data.get('track_id'); playlist = data.get('playlist'); language = data.get('language', 'English'); song_description = data.get('song_description')
+    if not track_id or not song_description or not playlist or not isinstance(playlist, dict): return jsonify({"error": "Missing required fields (track_id, song_description, playlist)."}), 400
     try:
-        market = 'US' # Default market
-        track = sp.track(track_id, market=market)
+        market = 'US'; track = sp.track(track_id, market=market)
         if not track: raise ValueError(f"Could not fetch details for track ID: {track_id}")
-        subject, body = generate_email_content(track, playlist, song_description)
-        return jsonify({"subject": subject, "body": body})
+        subject, preview_body, template_body = generate_email_template_and_preview(track, playlist, song_description, language)
+        return jsonify({"subject": subject, "preview_body": preview_body, "template_body": template_body})
     except (ValueError, spotipy.exceptions.SpotifyException) as e:
-         error_msg = format_error_message(e, "Preview Generation Failed")
-         status_code = 400 if isinstance(e, ValueError) else 502 # Bad Gateway for upstream Spotify error
-         print(f"Error generating preview: {error_msg}")
-         return jsonify({"error": error_msg}), status_code
+         error_msg = format_error_message(e, "Preview Generation Failed"); status_code = 400 if isinstance(e, ValueError) else 502; print(f"Error generating preview/template: {error_msg}"); return jsonify({"error": error_msg}), status_code
     except Exception as e:
-        print(f"Unexpected error generating email preview: {e}"); traceback.print_exc()
-        error_msg = format_error_message(e, default="Unexpected error generating preview.")
+        print(f"Unexpected error generating email preview/template: {e}");
+        error_msg = format_error_message(e, "Unexpected error generating preview/template.")
         return jsonify({"error": error_msg}), 500
 
 
 @playlists_bp.route('/send-emails', methods=['POST'])
 def send_emails_route():
-    # Use Client Credentials client if Spotify interaction is needed for track details
+    # ... (No changes needed here from previous step) ...
     sp = get_spotify_client_credentials_client()
-    # Check required config (Gemini, SMTP) - No change here
     if not sp: return Response("event: error\ndata: Spotify client error\n\n", mimetype='text/event-stream', status=503)
     if not current_app.config.get('GEMINI_API_KEY'): return Response("event: error\ndata: Gemini key missing\n\n", mimetype='text/event-stream', status=500)
-    sender_email = current_app.config.get("SENDER_EMAIL"); # ... (check other SMTP config as before) ...
-    sender_password = current_app.config.get("SENDER_PASSWORD")
-    smtp_server = current_app.config.get("SMTP_SERVER")
-    smtp_port = current_app.config.get("SMTP_PORT")
-    if not all([sender_email, sender_password, smtp_server, smtp_port]): return Response("event: error\ndata: SMTP creds missing\n\n", mimetype='text/event-stream', status=500)
-
-    # Get data from request - No change here
-    data = request.get_json(); # ... (validation as before) ...
+    sender_email = current_app.config.get("SENDER_EMAIL"); sender_password = current_app.config.get("SENDER_PASSWORD")
+    smtp_server_host = current_app.config.get("SMTP_SERVER"); smtp_port = current_app.config.get("SMTP_PORT")
+    if not all([sender_email, sender_password, smtp_server_host, smtp_port]): return Response("event: error\ndata: SMTP creds missing\n\n", mimetype='text/event-stream', status=500)
+    data = request.get_json();
     if not data: return Response("event: error\ndata: Missing request data\n\n", mimetype='text/event-stream', status=400)
-    selected_track_id = data.get('track_id'); song_description = data.get('song_description'); playlists_to_contact = data.get('playlists', [])
-    if not selected_track_id or not song_description or not isinstance(playlists_to_contact, list): return Response("event: error\ndata: Missing required fields\n\n", mimetype='text/event-stream', status=400)
+    selected_track_id = data.get('track_id'); playlists_to_contact = data.get('playlists', []); edited_template_body = data.get('template_body')
+    if not selected_track_id or not playlists_to_contact or not isinstance(playlists_to_contact, list) or not edited_template_body: return Response("event: error\ndata: Missing required fields (track, playlists, template_body)\n\n", mimetype='text/event-stream', status=400)
+    if '{{curator_name}}' not in edited_template_body or '{{playlist_name}}' not in edited_template_body: return Response("event: error\ndata: Edited template seems to be missing required placeholders {{curator_name}} or {{playlist_name}}\n\n", mimetype='text/event-stream', status=400)
     if not playlists_to_contact: return Response("event: status\ndata: No playlists provided\nevent: done\ndata: Finished.\n\n", mimetype='text/event-stream')
-
-    # --- Generator for Streaming (Uses the 'sp' client obtained above) ---
     def email_stream():
-        track = None; total_emails_to_send = len(playlists_to_contact); sent_count = 0; error_count = 0; start_time = time.time()
-        def yield_message(event, data): # Helper function (no change)
-            sanitized_data = str(data).replace('\n', ' ').replace('\r', ''); yield f"event: {event}\ndata: {sanitized_data}\n\n"
-
-        try: # Fetch track details once using the client credentials client
-            yield_message('status', 'Fetching track details...')
-            market = 'US'; track = sp.track(selected_track_id, market=market)
+        track = None; total_emails_to_send = len(playlists_to_contact); sent_count = 0; error_count = 0; start_time = time.time(); server = None
+        def yield_message(event, data): sanitized_data = str(data).replace('\n', ' ').replace('\r', ''); yield f"event: {event}\ndata: {sanitized_data}\n\n"
+        try:
+            yield_message('status', 'Fetching track details...'); market = 'US'; track = sp.track(selected_track_id, market=market)
             if not track: raise ValueError(f"Cannot fetch track details for ID: {selected_track_id}")
-            yield_message('status', f"Track '{track.get('name', 'N/A')}' details fetched.")
-        except (ValueError, spotipy.exceptions.SpotifyException) as e:
-            error_msg = format_error_message(e, "Error fetching track details"); yield_message('error', error_msg); yield_message('done', 'Aborted.'); return
-
-        # --- Loop through playlists (Logic remains the same) ---
-        for i, playlist in enumerate(playlists_to_contact):
-            # ... (Validation of playlist entry) ...
-            if not isinstance(playlist, dict): yield_message('status', f"Skipping invalid entry {i}."); continue
-            playlist_name = playlist.get('name', 'N/A'); curator_email = playlist.get('email')
-            current_status = f"({i+1}/{total_emails_to_send}) Processing '{playlist_name}'"; yield_message('status', current_status)
-            if not curator_email or '@' not in curator_email: yield_message('status', f"-> Skipping (no valid email)."); continue
-
+            track_name = track.get('name', 'N/A'); track_artist_name = track['artists'][0]['name'] if track.get('artists') else "Unknown Artist"
+            yield_message('status', f"Track '{track_name}' details fetched.")
+            yield_message('status', f"Connecting to SMTP server {smtp_server_host}:{smtp_port}...")
             try:
-                # 1. Generate Content (No change needed here, uses passed track/playlist data)
-                yield_message('status', f"-> Generating content for {curator_email}..."); subject, body = generate_email_content(track, playlist, song_description)
-                if not body: raise ValueError("AI generated empty body."); yield_message('status', f"-> Content generated.")
-                # 2. Send Email (No change needed here)
-                yield_message('status', f"-> Sending email to {curator_email}..."); send_single_email(curator_email, subject, body, sender_email, sender_password, smtp_server, smtp_port)
-                yield_message('success', f"-> Email sent to {curator_email}."); sent_count += 1
-                # 3. Wait (No change needed here)
-                sleep_duration = 6;
-                if i < total_emails_to_send - 1: yield_message('status', f"-> Waiting {sleep_duration}s..."); time.sleep(sleep_duration)
-            except Exception as e:
-                error_count += 1; error_msg = format_error_message(e, f"Failed for {curator_email}"); print(f"Error sending email to {curator_email}: {e}"); yield_message('error', f"-> Error: {error_msg}"); time.sleep(1)
-
-        # --- Final Summary (No change) ---
-        end_time = time.time(); duration = round(end_time - start_time); final_message = f"Finished in {duration}s. Sent: {sent_count}, Errors: {error_count} / {total_emails_to_send} attempted."
-        yield_message('done', final_message)
-
+                if smtp_port == 465: server = smtplib.SMTP_SSL(smtp_server_host, smtp_port, timeout=30)
+                else: server = smtplib.SMTP(smtp_server_host, smtp_port, timeout=30); server.ehlo(); server.starttls(); server.ehlo()
+                yield_message('status', 'SMTP connection established. Logging in...'); server.login(sender_email, sender_password); yield_message('status', 'SMTP login successful. Starting email batch.')
+            except smtplib.SMTPAuthenticationError as auth_err: raise ConnectionError(f"SMTP Auth Error: {auth_err}. Check email/password/App Password.") from auth_err
+            except Exception as conn_err: raise ConnectionError(f"SMTP Connection Error: {conn_err}") from conn_err
+            for i, playlist in enumerate(playlists_to_contact):
+                if not isinstance(playlist, dict): yield_message('status', f"Skipping invalid entry {i+1}."); continue
+                playlist_name = playlist.get('name', 'N/A'); curator_email = playlist.get('email')
+                current_status = f"({i+1}/{total_emails_to_send}) Processing '{playlist_name}'"; yield_message('status', current_status)
+                if not curator_email or '@' not in curator_email: yield_message('status', f"-> Skipping (no valid email)."); continue
+                try:
+                    yield_message('status', f"-> Preparing email for {curator_email}...")
+                    actual_curator_name = playlist.get('owner_name');
+                    if not actual_curator_name or actual_curator_name.lower() in ['n/a', 'spotify']: actual_curator_name = "Playlist Curator"
+                    personalized_body = edited_template_body.replace("{{curator_name}}", actual_curator_name).replace("{{playlist_name}}", playlist_name)
+                    subject = f'Music Submission: "{track_name}" by {track_artist_name}'
+                    yield_message('status', f"-> Sending email to {curator_email}...")
+                    msg = EmailMessage(); msg['Subject'] = subject; msg['From'] = sender_email; msg['To'] = curator_email
+                    msg.set_content(personalized_body, subtype='plain', charset='utf-8'); server.send_message(msg)
+                    yield_message('success', f"-> Email sent to {curator_email}."); sent_count += 1
+                    sleep_duration = random.uniform(8, 15)
+                    if i < total_emails_to_send - 1: yield_message('status', f"-> Waiting {sleep_duration:.1f}s..."); time.sleep(sleep_duration)
+                except smtplib.SMTPException as send_err: error_count += 1; error_msg = format_error_message(send_err, f"SMTP send failed for {curator_email}"); print(f"Error sending email to {curator_email}: {send_err}"); yield_message('error', f"-> Error: {error_msg}"); time.sleep(5)
+                except Exception as e: error_count += 1; error_msg = format_error_message(e, f"Failed processing for {curator_email}"); print(f"Error processing email for {curator_email}: {e}"); yield_message('error', f"-> Error: {error_msg}"); time.sleep(2)
+        except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e: error_msg = format_error_message(e, "Email process setup failed"); print(f"Email process setup error: {e}"); yield_message('error', error_msg); yield_message('done', 'Aborted due to setup error.'); return
+        except Exception as e: error_msg = format_error_message(e, "Unexpected error during email process"); print(f"Unexpected email process error: {e}"); traceback.print_exc(); yield_message('error', error_msg); yield_message('done', 'Aborted due to unexpected error.'); return
+        finally:
+            if server: yield_message('status', "Closing SMTP connection...");
+            try: server.quit(); yield_message('status', "SMTP connection closed.")
+            except smtplib.SMTPException as quit_err: print(f"Error quitting SMTP connection: {quit_err}"); yield_message('warning', "Error closing SMTP connection.")
+            end_time = time.time(); duration = round(end_time - start_time); final_message = f"Finished in {duration}s. Sent: {sent_count}, Errors: {error_count} / {total_emails_to_send} attempted."; yield_message('done', final_message)
     return Response(email_stream(), mimetype='text/event-stream')
 
-# --- END OF FILE app/playlists/routes.py ---
+
+# --- END OF (CORRECTED) FILE app/playlists/routes.py ---

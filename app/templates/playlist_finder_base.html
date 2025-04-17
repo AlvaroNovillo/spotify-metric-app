@@ -13,7 +13,8 @@
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-4 text-center">Find Playlists & Contact Curators for {{ artist_name }}</h1>
-<p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, describe it, find relevant playlists using Spotify/Last.fm keywords, and contact curators (experimental).</p>
+{# Modified description slightly #}
+<p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, find relevant playlists, then generate & send outreach emails (experimental).</p>
 
 {# Disclaimer #}
 <div class="max-w-7xl mx-auto bg-yellow-900 border border-yellow-700 text-yellow-100 px-4 py-3 rounded relative mb-8" role="alert">
@@ -27,7 +28,7 @@
     {# --- Left Column (Wider): Form --- #}
     <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
         {# Form action points to the route with the specific artist ID #}
-        <form method="GET" action="{{ url_for('playlists.playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
+        <form method="GET" action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
             {# 1. Track Selection #}
             <h2 class="text-xl font-semibold mb-5 text-center">1. Select Track by {{ artist_name }}</h2>
             {% if top_tracks %}
@@ -60,18 +61,10 @@
                  <p class="text-center text-red-400 italic mb-4">Could not load top tracks for {{ artist_name }}.</p>
             {% endif %}
 
-             {# 2. Song Description #}
-            <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Describe Your Song (for AI)</h2>
-            <div class="mb-5">
-                 <label for="song_description" class="block text-sm font-medium text-gray-300 mb-1">Enter a short description (mood, genre, selling points):</label>
-                 <textarea name="song_description" id="song_description" rows="4"
-                           placeholder="e.g., A dreamy shoegaze track with ethereal vocals and layered guitars, perfect for late-night listening or introspective moments."
-                           class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white"
-                           required>{{ song_description }}</textarea> {# Uses value passed from route #}
-             </div>
+             {# REMOVED Song Description from here #}
 
-            {# 3. Optional Keywords #}
-            <h2 class="text-xl font-semibold mb-3 text-center mt-6">3. Add Optional Search Keywords</h2>
+            {# 2. Optional Keywords (was 3) #}
+            <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Add Optional Search Keywords</h2>
              <div class="mb-5">
                  <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
                  <input type="text" name="user_keywords" id="user_keywords"
@@ -86,10 +79,11 @@
                          {% if not top_tracks %}disabled title="Top tracks need to load first"{% endif %}>
                     Find Playlists
                  </button>
-                 <button type="button" id="send-emails-button" onclick="showEmailPreview(event)"
-                         class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden">
+                 {# "Contact Curators" button triggers the overlay #}
+                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()" {# Changed name, points to new JS function #}
+                         class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden"> {# Renamed ID, still hidden initially #}
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
-                     Contact Curators (Preview First)
+                     Generate & Send Emails...
                  </button>
                  <input type="hidden" id="playlists-data-hidden" value="">
              </div>
@@ -117,10 +111,7 @@
         <div id="playlist-results-container" class="flex-grow min-h-[200px]">
             {% if not search_performed and not loading %}
                 <div class="flex items-center justify-center h-full">
-                     <p class="text-center text-gray-500 italic">Select a track by {{ artist_name }}, describe it, and click "Find Playlists" to see results.</p>
-                     {# Display Spotify Genres and Last.fm Tags available even before search #}
-                     {% set combined_initial_tags = ((artist_genres or []) + (lastfm_tags or [])) | map('lower') | unique | sort %}
-                     {% endif %}
+                     <p class="text-center text-gray-500 italic">Select a track by {{ artist_name }} and click "Find Playlists" to see results.</p>
                 </div>
             {% endif %}
             {# Results loaded here via JS #}
@@ -137,33 +128,78 @@
 
 </div>{# End Main Grid #}
 
-{# --- Email Preview Overlay --- #}
-<div id="email-preview-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col">
-        <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Email Preview</h2>
-        <p class="text-sm text-gray-400 mb-4">Review the AI-generated email for the <strong class="text-gray-200">first valid contact</strong> before sending to all curators.</p>
-        <div class="flex-grow overflow-y-auto mb-4 pr-2 custom-scrollbar">
-            <div class="mb-4 p-3 bg-gray-700 rounded border border-gray-600">
-                <strong class="block text-gray-300 text-sm mb-1">Subject:</strong>
-                <p id="preview-subject" class="text-sm text-gray-100"></p>
+{# --- REVISED Email Preview & Generation Overlay --- #}
+<div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col"> {# Increased max-width #}
+        <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Generate & Send Outreach Emails</h2>
+
+        {# Input Section #}
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                 <label for="song-description-editor" class="block text-gray-300 text-sm font-semibold mb-1">1. Song Description (for AI):</label>
+                 <textarea id="song-description-editor" rows="5"
+                           placeholder="e.g., A dreamy shoegaze track with ethereal vocals and layered guitars, perfect for late-night listening or introspective moments."
+                           class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
             </div>
-            <div class="p-3 bg-gray-700 rounded border border-gray-600">
-                 <strong class="block text-gray-300 text-sm mb-1">Body:</strong>
-                 <pre id="preview-body" class="text-sm text-gray-100 whitespace-pre-wrap"></pre>
+            <div>
+                 <label for="language-selector" class="block text-gray-300 text-sm font-semibold mb-1">2. Email Language:</label>
+                 <select id="language-selector" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                     <option value="English" selected>English</option>
+                     <option value="Spanish">Spanish</option>
+                     <option value="French">French</option>
+                     <option value="German">German</option>
+                     <option value="Portuguese">Portuguese</option>
+                     <option value="Italian">Italian</option>
+                     {# Add other languages as needed #}
+                 </select>
             </div>
         </div>
-        <p class="text-xs text-yellow-400 mb-4 text-center flex-shrink-0">
-             Note: The AI might occasionally make mistakes. Emails will be sent sequentially with delays.
-        </p>
-        <div class="flex justify-end space-x-4 flex-shrink-0">
+
+         {# Generate Button #}
+         <button type="button" id="generate-email-button" onclick="generateEmailAction()" class="w-full md:w-1/2 mx-auto mb-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50 disabled:cursor-wait">
+             <span class="button-text">Generate Template & Preview</span>
+             <span class="button-loading animate-pulse hidden">Generating...</span>
+         </button>
+
+         {# Divider #}
+         <hr id="email-preview-divider" class="border-gray-600 my-4 hidden">
+
+        {# Preview & Edit Section (Initially Hidden) #}
+        <div id="email-preview-edit-section" class="hidden flex-grow min-h-0"> {# Ensure min-height is 0 to allow shrinking #}
+            <p class="text-sm text-gray-400 mb-4">3. Review & Edit the generated template below. Placeholders <code class="text-xs bg-gray-600 px-1 rounded">{{curator_name}}</code> and <code class="text-xs bg-gray-600 px-1 rounded">{{playlist_name}}</code> will be replaced for each email.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto flex-grow pr-2 custom-scrollbar"> {# Added flex-grow #}
+                {# Column 1: Editable Template #}
+                <div class="flex flex-col">
+                    <label for="template-body-editor" class="block text-gray-300 text-sm font-semibold mb-2">Editable Template Body:</label>
+                    <textarea id="template-body-editor" rows="15" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm font-mono resize-none"></textarea>
+                </div>
+                {# Column 2: Subject & Rendered Preview #}
+                <div class="flex flex-col">
+                    <div class="mb-4">
+                        <strong class="block text-gray-300 text-sm font-semibold mb-1">Subject Line (Example):</strong>
+                        <p id="preview-subject" class="text-sm text-gray-100 p-2 bg-gray-700 rounded border border-gray-600 min-h-[38px]"></p> {# Added min-height #}
+                    </div>
+                    <div>
+                         <strong class="block text-gray-300 text-sm font-semibold mb-1">Preview (Using First Playlist):</strong>
+                         <div class="p-3 bg-gray-700 rounded border border-gray-600 max-h-[300px] overflow-y-auto custom-scrollbar">
+                             <pre id="preview-body" class="text-sm text-gray-100 whitespace-pre-wrap min-h-[100px]"></pre> {# Added min-height #}
+                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Footer Buttons #}
+        <div class="mt-4 pt-4 border-t border-gray-600 flex justify-end space-x-4 flex-shrink-0">
             <button type="button" onclick="cancelEmailSend()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition duration-200">Cancel</button>
-            <button type="button" id="confirm-send-button" onclick="confirmAndSendEmails()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50" disabled>
-                <span class="button-text">Confirm & Send All</span>
-                <span class="button-loading animate-pulse hidden">Generating...</span>
+            {# This button becomes active after generation #}
+            <button type="button" id="confirm-send-button" onclick="confirmAndSendEmails()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition duration-200 hidden disabled:opacity-50">
+                Confirm & Send All
             </button>
         </div>
     </div>
 </div>
+
 
 {# Link back to general search page #}
 <div class="text-center mt-10">
@@ -211,7 +247,7 @@
         }
         // Consider updating title based on artist name if available
         document.title = "Playlist Search Error for {{ artist_name | e }}";
-        const emailButton = document.getElementById('send-emails-button');
+        const emailButton = document.getElementById('contact-curators-button'); // Use correct ID
         if (emailButton) emailButton.classList.add('hidden');
     }
 
@@ -230,7 +266,7 @@
 
     // --- Show/Hide Email Button ---
     function showEmailButton() {
-        const btn = document.getElementById('send-emails-button');
+        const btn = document.getElementById('contact-curators-button'); // Use correct ID
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
         if (btn && playlistsDataInput && playlistsDataInput.value && playlistsDataInput.value !== '[]') {
              btn.classList.remove('hidden');
@@ -249,39 +285,100 @@
         showEmailButton(); // Check if button should be shown after injecting data
     }
 
-    // --- Email Preview & Sending Logic ---
-    function showEmailPreview(event) {
-        event.preventDefault();
-        const overlay = document.getElementById('email-preview-overlay');
+    // --- REVISED Email Overlay & Generation Logic ---
+
+    // Store generated template globally within this script's scope
+    let currentGeneratedTemplate = '';
+    let currentSubjectLine = '';
+
+    function showEmailOverlay() {
+        const overlay = document.getElementById('email-overlay');
+        const descriptionEditor = document.getElementById('song-description-editor');
+        const langSelector = document.getElementById('language-selector');
+        const previewEditSection = document.getElementById('email-preview-edit-section');
+        const previewDivider = document.getElementById('email-preview-divider');
+        const generateBtn = document.getElementById('generate-email-button');
+        const sendBtn = document.getElementById('confirm-send-button');
+        const templateEditor = document.getElementById('template-body-editor');
+        const previewSubject = document.getElementById('preview-subject');
+        const previewBody = document.getElementById('preview-body');
+
+        // Reset state on showing overlay
+        descriptionEditor.value = ''; // Clear previous description
+        langSelector.value = 'English'; // Reset language
+        templateEditor.value = ''; // Clear template editor
+        previewSubject.textContent = ''; // Clear subject
+        previewBody.textContent = ''; // Clear preview body
+        previewEditSection.classList.add('hidden'); // Hide preview area
+        previewDivider.classList.add('hidden'); // Hide divider
+        generateBtn.disabled = false; // Enable generate button
+        generateBtn.querySelector('.button-text').classList.remove('hidden');
+        generateBtn.querySelector('.button-loading').classList.add('hidden');
+        sendBtn.classList.add('hidden'); // Hide send button initially
+        sendBtn.disabled = true; // Ensure send button is disabled initially
+
+        if (overlay) {
+            overlay.classList.remove('hidden');
+        } else {
+            console.error("Email overlay element not found");
+        }
+    }
+
+    function generateEmailAction() {
+        // Triggered by the "Generate Template & Preview" button
+        const overlay = document.getElementById('email-overlay');
         const subjectEl = document.getElementById('preview-subject');
-        const bodyEl = document.getElementById('preview-body');
-        const confirmBtn = document.getElementById('confirm-send-button');
-        const loadingText = confirmBtn ? confirmBtn.querySelector('.button-loading') : null;
-        const buttonText = confirmBtn ? confirmBtn.querySelector('.button-text') : null;
+        const previewBodyEl = document.getElementById('preview-body'); // PREVIEW display
+        const templateEditorEl = document.getElementById('template-body-editor'); // EDITABLE textarea
+        const descriptionEditor = document.getElementById('song-description-editor');
+        const langSelector = document.getElementById('language-selector');
+        const generateBtn = document.getElementById('generate-email-button');
+        const sendBtn = document.getElementById('confirm-send-button');
+        const previewEditSection = document.getElementById('email-preview-edit-section');
+        const previewDivider = document.getElementById('email-preview-divider');
+        const loadingText = generateBtn ? generateBtn.querySelector('.button-loading') : null;
+        const buttonText = generateBtn ? generateBtn.querySelector('.button-text') : null;
 
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const songDescriptionInput = document.getElementById('song_description');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
+        // Validation
         if (!selectedTrackInput) { alert('Please select a track first.'); return; }
-        if (!songDescriptionInput || !songDescriptionInput.value.trim()) { alert('Please enter a song description.'); songDescriptionInput.focus(); return; }
-        if (!playlistsDataInput || !playlistsDataInput.value) { alert('Playlist data not found. Perform search first.'); return; }
+        const songDescription = descriptionEditor.value.trim();
+        if (!songDescription) { alert('Please enter a song description.'); descriptionEditor.focus(); return; }
+        const language = langSelector.value;
+        if (!language) { alert('Please select an email language.'); langSelector.focus(); return; }
+
+        if (!playlistsDataInput || !playlistsDataInput.value) { alert('Playlist data not found. Run playlist search first.'); return; }
         let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { alert('Error reading playlist data.'); return; }
         const firstPlaylist = playlists.find(p => p && p.email && p.email.includes('@'));
         if (!firstPlaylist) { alert("No playlists with contactable emails found in results."); return; }
 
         const trackId = selectedTrackInput.value;
-        const description = songDescriptionInput.value.trim();
 
-        // Show loading state
-        subjectEl.textContent = 'Generating...'; bodyEl.textContent = 'Generating preview content with AI...';
-        if (confirmBtn) confirmBtn.disabled = true; if (loadingText) loadingText.classList.remove('hidden'); if (buttonText) buttonText.classList.add('hidden'); if (overlay) overlay.classList.remove('hidden');
+        // --- Show loading state on Generate button ---
+        if (generateBtn) generateBtn.disabled = true;
+        if (loadingText) loadingText.classList.remove('hidden');
+        if (buttonText) buttonText.classList.add('hidden');
+        previewEditSection.classList.add('hidden'); // Hide preview section during generation
+        previewDivider.classList.add('hidden');
+        sendBtn.classList.add('hidden'); // Ensure send button is hidden
+        sendBtn.disabled = true;
+        subjectEl.textContent = 'Generating...';
+        previewBodyEl.textContent = 'Generating...';
+        templateEditorEl.value = 'Generating...';
+        templateEditorEl.disabled = true;
 
         const previewUrl = "{{ url_for('playlists.generate_preview_email_route') }}";
         fetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ track_id: trackId, song_description: description, playlist: firstPlaylist })
+            body: JSON.stringify({
+                track_id: trackId,
+                song_description: songDescription, // Send current description
+                language: language,               // Send selected language
+                playlist: firstPlaylist           // Send first playlist for preview context
+             })
         })
         .then(response => {
             if (!response.ok) { return response.json().then(err => { throw new Error(err.error || `HTTP error ${response.status}`) }); }
@@ -289,106 +386,131 @@
         })
         .then(data => {
             if (data.error) { throw new Error(data.error); }
-            subjectEl.textContent = data.subject || '[Subject Generation Failed]';
-            bodyEl.textContent = data.body || '[Body Generation Failed]';
-            if (confirmBtn) confirmBtn.disabled = false;
+            currentSubjectLine = data.subject || '[Subject Generation Failed]'; // Store subject
+            currentGeneratedTemplate = data.template_body || '[Template Generation Failed]'; // Store template
+
+            subjectEl.textContent = currentSubjectLine;
+            previewBodyEl.textContent = data.preview_body || '[Preview Generation Failed]';
+            templateEditorEl.value = currentGeneratedTemplate;
+
+            // Show preview/edit section and enable editor/send button on success
+            previewEditSection.classList.remove('hidden');
+            previewDivider.classList.remove('hidden');
+            if (data.template_body) {
+                templateEditorEl.disabled = false;
+                sendBtn.classList.remove('hidden'); // Show the send button
+                sendBtn.disabled = false;           // Enable the send button
+            } else {
+                templateEditorEl.disabled = true;
+                sendBtn.classList.add('hidden');
+                sendBtn.disabled = true;
+            }
         })
         .catch(error => {
-            console.error("Error fetching email preview:", error); subjectEl.textContent = 'Error'; bodyEl.textContent = `Failed to generate preview: ${error.message}`; if (confirmBtn) confirmBtn.disabled = true;
+            console.error("Error fetching email preview/template:", error);
+            subjectEl.textContent = 'Error';
+            previewBodyEl.textContent = `Failed to generate: ${error.message}`;
+            templateEditorEl.value = `Failed to generate template: ${error.message}`;
+            templateEditorEl.disabled = true;
+            sendBtn.classList.add('hidden');
+            sendBtn.disabled = true;
         })
         .finally(() => {
-             if (loadingText) loadingText.classList.add('hidden'); if (buttonText) buttonText.classList.remove('hidden');
+            // Reset Generate button state
+            if (generateBtn) generateBtn.disabled = false;
+            if (loadingText) loadingText.classList.add('hidden');
+            if (buttonText) buttonText.classList.remove('hidden');
         });
     }
 
     function cancelEmailSend() {
-         const overlay = document.getElementById('email-preview-overlay'); if (overlay) overlay.classList.add('hidden');
+         const overlay = document.getElementById('email-overlay');
+         if (overlay) overlay.classList.add('hidden');
     }
 
     function confirmAndSendEmails() {
-        cancelEmailSend(); // Hide preview
-        const sendButton = document.getElementById('send-emails-button');
+        const templateEditorEl = document.getElementById('template-body-editor');
+        const editedTemplateBody = templateEditorEl ? templateEditorEl.value.trim() : null;
+
+        // Validate edited template
+        if (!editedTemplateBody) { alert("Template body cannot be empty."); templateEditorEl.focus(); return; }
+        if (editedTemplateBody.indexOf('{{curator_name}}') === -1 || editedTemplateBody.indexOf('{{playlist_name}}') === -1) {
+             if (!confirm("The template seems to be missing the required placeholders {{curator_name}} or {{playlist_name}}. Emails might not render correctly. Send anyway?")) {
+                 templateEditorEl.focus(); return;
+             }
+        }
+
+        cancelEmailSend(); // Hide overlay
+
+        const contactButton = document.getElementById('contact-curators-button'); // The button on the main page
         const emailStatusContainer = document.getElementById('email-status-container');
         const emailLog = document.getElementById('email-log');
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const songDescriptionInput = document.getElementById('song_description');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
-        if (!selectedTrackInput || !songDescriptionInput || !playlistsDataInput) { console.error("Missing data for sending emails."); return; }
-        const trackId = selectedTrackInput.value; const description = songDescriptionInput.value.trim();
+        if (!selectedTrackInput || !playlistsDataInput) { console.error("Missing data for sending emails."); return; }
+        const trackId = selectedTrackInput.value;
         let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { console.error("Cannot parse playlist data for sending."); return; }
         const playlistsToContact = playlists.filter(p => p && p.email && p.email.includes('@'));
-        if (playlistsToContact.length === 0) { console.log("No playlists with emails to contact."); alert("No playlists with valid emails found in results to contact."); return; }
+        if (playlistsToContact.length === 0) { alert("No playlists with valid emails found in results to contact."); return; }
 
 
-        // Update UI
-        if (sendButton) { sendButton.disabled = true; sendButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>'; }
-        if (emailLog) emailLog.textContent = 'Initializing email process...\n';
+        // Update UI on main page
+        if (contactButton) { contactButton.disabled = true; contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>'; }
+        if (emailLog) emailLog.textContent = 'Initializing email process...\nUsing edited template.\n'; // Indicate template use
         if (emailStatusContainer) emailStatusContainer.style.display = 'block';
 
         const sendUrl = "{{ url_for('playlists.send_emails_route') }}";
         console.log("Starting Fetch POST for email sending:", sendUrl);
+
+        // Send EDITED template body to backend
         fetch(sendUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-            body: JSON.stringify({ track_id: trackId, song_description: description, playlists: playlistsToContact })
+            body: JSON.stringify({
+                track_id: trackId,
+                playlists: playlistsToContact,
+                template_body: editedTemplateBody // Send the edited template
+             })
         })
-        .then(response => { // Handle initial response and stream
+        .then(response => { // Handle SSE stream
              if (!response.ok) { throw new Error(`Email sending failed: ${response.status} ${response.statusText}`); }
              if (!response.body) { throw new Error("Response body is missing for streaming."); }
-
              const reader = response.body.getReader();
              const decoder = new TextDecoder();
-
              function processStream({ done, value }) {
                  if (done) {
                      console.log("Email stream finished.");
-                      // Reset button only after stream is truly done
-                      if (sendButton) {
-                          sendButton.disabled = false;
-                          // Restore original button content with SVG
-                          sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Contact Curators (Preview First)';
+                      if (contactButton) { // Reset the main page button
+                          contactButton.disabled = false;
+                          contactButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Generate & Send Emails...';
                       }
                      return;
                  }
                  const chunk = decoder.decode(value, { stream: true });
-                 // Process server-sent events (SSE)
                  const lines = chunk.split('\n');
-                 lines.forEach(line => {
-                     line = line.trim(); // Trim whitespace
-                     if (line.startsWith('event:')) {
-                         const eventType = line.substring(6).trim();
-                         // Find corresponding data line (can be immediately after or later in the same chunk)
-                         const dataLineIndex = lines.findIndex(l => l.trim().startsWith('data:'));
-                         if (dataLineIndex !== -1 && dataLineIndex > lines.indexOf(line)) { // Ensure data is *after* event
-                             const dataLine = lines[dataLineIndex].trim();
-                             const eventData = dataLine.substring(5).trim();
-                             console.log(`SSE Event: ${eventType}, Data: ${eventData}`);
-                             if (emailLog) {
-                                  let logPrefix = '';
-                                  if(eventType === 'success') logPrefix = '✅ ';
-                                  else if(eventType === 'error') logPrefix = '❌ ';
-                                  else if(eventType === 'status') logPrefix = '⏳ ';
-                                  else if(eventType === 'done') logPrefix = '🏁 ';
-                                  emailLog.textContent += logPrefix + eventData + '\n';
-                                  emailLog.scrollTop = emailLog.scrollHeight; // Auto-scroll
-                             }
-                             // Removed button reset from here, handled in 'done' check
-                         }
-                     }
+                 lines.forEach(line => { // Process SSE lines
+                      line = line.trim();
+                      if (line.startsWith('event:')) {
+                          const eventType = line.substring(6).trim();
+                          const dataLineInChunk = lines.slice(lines.indexOf(line) + 1).find(l => l.trim().startsWith('data:'));
+                          if (dataLineInChunk) {
+                              const eventData = dataLineInChunk.trim().substring(5).trim();
+                              console.log(`SSE Event: ${eventType}, Data: ${eventData}`);
+                              if (emailLog) { let logPrefix = ''; if(eventType === 'success') logPrefix = '✅ '; else if(eventType === 'error') logPrefix = '❌ '; else if(eventType === 'status') logPrefix = '⏳ '; else if(eventType === 'done') logPrefix = '🏁 '; emailLog.textContent += logPrefix + eventData + '\n'; emailLog.scrollTop = emailLog.scrollHeight; }
+                          } else if (line === 'event: done') { console.log("SSE Event: done (no data line)"); if (emailLog) emailLog.textContent += '🏁 Finished.\n'; }
+                      }
                  });
-                 // Read the next chunk
                  reader.read().then(processStream);
              }
              reader.read().then(processStream);
         })
-        .catch(error => {
+        .catch(error => { // Handle fetch/stream error
              console.error("Error sending emails:", error);
              if (emailLog) emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
-             // Reset button on error
-             if (sendButton) {
-                 sendButton.disabled = false;
-                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Contact Curators (Preview First)';
+             if (contactButton) { // Reset main page button
+                 contactButton.disabled = false;
+                 contactButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Generate & Send Emails...';
              }
         });
     }
@@ -398,13 +520,13 @@
      if(findForm) {
          findForm.addEventListener('submit', function(event) {
              const selectedRadio = findForm.querySelector('input[name="selected_track_id"]:checked');
-             const descriptionInput = document.getElementById('song_description');
+             // Removed description check from here
              if (!selectedRadio) { alert("Please select a track."); event.preventDefault(); return; }
-             if (!descriptionInput || !descriptionInput.value.trim()) { alert("Please enter a song description."); descriptionInput.focus(); event.preventDefault(); return; }
+             // if (!descriptionInput || !descriptionInput.value.trim()) { alert("Please enter a song description."); descriptionInput.focus(); event.preventDefault(); return; }
              const findButton = findForm.querySelector('#find-playlists-button');
              if(findButton) { findButton.disabled = true; findButton.innerHTML = '<span class="animate-pulse">Finding...</span>'; }
              // Clear previous results/logs
-             const emailButton = document.getElementById('send-emails-button'); if (emailButton) emailButton.classList.add('hidden');
+             const emailButton = document.getElementById('contact-curators-button'); if (emailButton) emailButton.classList.add('hidden');
              const emailStatusContainer = document.getElementById('email-status-container'); if (emailStatusContainer) { emailStatusContainer.style.display = 'none'; emailStatusContainer.querySelector('#email-log').textContent = ''; }
              const progressContainer = document.getElementById('progress-container'); if (progressContainer) progressContainer.style.display = 'block';
              const resultsContainer = document.getElementById('playlist-results-container'); if (resultsContainer) { resultsContainer.innerHTML = ''; }
@@ -426,6 +548,8 @@
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; /* gray-500 */ }
     /* For Firefox */
     .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4b5563 #374151; /* thumb track */ }
+    /* Ensure mono font */
+    #template-body-editor { font-family: monospace; }
 </style>
 {% endblock %}
-{# --- END OF FILE templates/playlist_finder_base.html --- #}
+{# --- END OF FILE templates/show_playlist_finder_base.html --- #}

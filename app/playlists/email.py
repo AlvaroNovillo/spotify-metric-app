@@ -1,172 +1,121 @@
+# --- START OF (CORRECTED) FILE app/playlists/email.py ---
 import os
 import time
 import smtplib
 import traceback
 from email.message import EmailMessage
 import google.generativeai as genai
-from flask import current_app # To access config like API key
+from flask import current_app
 
 # --- Helper to Format Errors ---
 def format_error_message(exception, context=""):
     """Formats an exception into a user-friendly string."""
     prefix = f"{context}: " if context else ""
-    # Check for specific API error attributes if needed (e.g., Gemini error codes)
-    # For now, just return the string representation of the exception
     return f"{prefix}{str(exception)}"
 
-# --- Gemini Email Content Generation ---
-def generate_email_content(track_details, playlist_details, song_description):
+# --- REVISED Gemini Email Content Generation with Language ---
+def generate_email_template_and_preview(track_details, playlist_details, song_description, language="English"):
     """
-    Generates email subject and body using Gemini AI.
-
-    Args:
-        track_details (dict): Spotify track object.
-        playlist_details (dict): Playlist object (from scraper).
-        song_description (str): User-provided description of the song.
-
-    Returns:
-        tuple: (subject, body) strings.
-        Raises Exception if generation fails.
+    Generates an email body template using Gemini AI in the specified language,
+    and a preview rendered with the provided initial playlist details.
     """
     if not current_app.config.get('GEMINI_API_KEY'):
         raise ValueError("Gemini API Key is not configured.")
     if not track_details or not playlist_details or not song_description:
         raise ValueError("Missing required details for email generation.")
+    if not language: language = "English" # Default language
 
     model_name = current_app.config.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-    print(f"[Email Gen] Using Gemini model: {model_name}")
+    print(f"[Email Gen] Using Gemini model: {model_name} to generate template in {language}")
 
     try:
-        # Extract necessary details safely
+        # Extract details for prompt context
         track_name = track_details.get('name', 'N/A')
-        # Get the primary artist of the track
         track_artist_name = track_details['artists'][0]['name'] if track_details.get('artists') else "Unknown Artist"
         track_url = track_details.get('external_urls', {}).get('spotify', '#')
-
-        playlist_name = playlist_details.get('name', 'Your Playlist')
-        # Try to get a curator name, default to 'Playlist Curator'
-        curator_name = playlist_details.get('owner_name')
-        if not curator_name or curator_name.lower() in ['n/a', 'spotify']:
-            curator_name = "Playlist Curator" # Generic fallback
-
-        # Use the track's artist name for the signature
+        initial_playlist_name = playlist_details.get('name', 'Your Playlist')
+        initial_curator_name = playlist_details.get('owner_name')
+        if not initial_curator_name or initial_curator_name.lower() in ['n/a', 'spotify']:
+            initial_curator_name = "Playlist Curator"
         signature_name = track_artist_name
+        subject_line = f'Music Submission: "{track_name}" by {track_artist_name}'
 
-        # --- Construct the Prompt ---
-        subject_line = f'Music Submission: "{track_name}" by {track_artist_name} for playlist "{playlist_name}"'
-
-        # Refined prompt focusing on clear instructions and desired output format
-        prompt_body = f"""
-        Generate ONLY the email body content for a music submission pitch.
-
-        **Input Information:**
-        *   **Curator's Name:** {curator_name}
-        *   **Curator's Playlist Name:** "{playlist_name}"
-        *   **Song Title:** "{track_name}"
-        *   **Artist Name (of the song):** {track_artist_name}
-        *   **Link to the song:** {track_url}
-        *   **Brief Song Description (from user):** {song_description}
-        *   **Sender's Name / Signature:** {signature_name}
-
-        **Instructions for Email Body Generation:**
-        1.  **Greeting:** Start with a personalized, friendly greeting (e.g., "Hi {curator_name}," or "Hello {curator_name},").
-        2.  **Context:** Briefly express appreciation for their specific playlist, "{playlist_name}". Show you've actually looked at it (even if generically stated here).
-        3.  **Introduction:** Clearly introduce the song "{track_name}" by {track_artist_name}.
-        4.  **Description:** Integrate the user's song description: "{song_description}". You can slightly rephrase it for flow if needed.
-        5.  **Call to Action/Link:** Clearly provide the Spotify link: {track_url}. Maybe invite them to listen.
-        6.  **Conciseness:** Keep the entire email body relatively short and to the point (aim for 4-7 sentences).
-        7.  **Closing:** Use a polite and standard closing (e.g., "Best regards,", "Thanks for considering,", "Sincerely,").
-        8.  **Signature:** End ONLY with the provided Sender's Name: {signature_name}.
-        9.  **CRITICAL:** Do NOT include the subject line. Do NOT add any extra text, placeholders like "[Your Info]", greetings before the main greeting, or explanations about the email itself. The output MUST start directly with the greeting (e.g., "Hi ...").
-
-        **Example Structure:**
-
-        Hi [Curator's Name],
-
-        [Sentence expressing appreciation for their playlist "{playlist_name}".]
-        I'd love to submit my track "{track_name}" by {track_artist_name} for your consideration.
-        [Sentence incorporating the song description: "{song_description}".]
-        You can listen to it here: {track_url}
-        [Optional short sentence about fit or hope for consideration.]
-
-        [Closing],
-        {signature_name}
-
-        ---
-        GENERATE THE EMAIL BODY NOW:
-        """
+        # --- Construct the Prompt for TEMPLATE Generation ---
+        # Use standard strings for lines containing placeholders meant for AI
+        # Use f-strings only for lines inserting Python variables safely
+        prompt_parts = [
+            f"Generate ONLY the email body content as a template for a music submission pitch, written in {language}.",
+            "Use the exact placeholders {{curator_name}} and {{playlist_name}} where the curator's name and playlist name should go.",
+            "Do NOT replace these placeholders in your output.",
+            "\n**Context Information (Use for tone and song details, NOT for replacing placeholders):**",
+            f"*   **Example Curator's Name:** {initial_curator_name}",
+            # ***** FIX: Use standard string concatenation or simple format for this line *****
+            '*   **Example Playlist Name:** "' + initial_playlist_name + '"',
+            f'*   **Song Title:** "{track_name}"',
+            f'*   **Artist Name (of the song):** {track_artist_name}',
+            f'*   **Link to the song:** {track_url}',
+            f'*   **Brief Song Description (from user):** {song_description}',
+            f'*   **Sender\'s Name / Signature:** {signature_name}',
+            "\n**Instructions for Email Body TEMPLATE Generation:**",
+            "1.  **Greeting:** Start with a friendly greeting in the target language using the placeholder `{{curator_name}}`.",
+            # ***** FIX: Ensure this is NOT an f-string *****
+            '2.  **Context:** Briefly express appreciation for their specific playlist using the placeholder `"{playlist_name}"`.',
+            f'3.  **Introduction:** Clearly introduce the song "{track_name}" by {track_artist_name} (keep names as is).',
+            f'4.  **Description:** Integrate the user\'s song description: "{song_description}". Rephrase slightly for flow in the target language if needed.',
+            f'5.  **Call to Action/Link:** Clearly provide the Spotify link: {track_url}. Invite them to listen.',
+            "6.  **Conciseness:** Keep the template relatively short (4-7 sentences).",
+            "7.  **Closing:** Use a polite closing appropriate for the target language.",
+            f'8.  **Signature:** End ONLY with the provided Sender\'s Name: {signature_name}.',
+            '9.  **CRITICAL:** Output ONLY the template body in the specified language. Use the exact placeholders `{{curator_name}}` and `{{playlist_name}}`. Do NOT include the subject line, greetings before the main greeting, or extra text. Start directly with "Hi {{curator_name}},".',
+            "\n**Example Template Structure:**",
+            # ***** FIX: Ensure this is NOT an f-string *****
+            '\nHi {{curator_name}},',
+            # ***** FIX: Ensure this is NOT an f-string *****
+            '\nI really enjoy your playlist "{playlist_name}"!',
+            f'\nI\'d love to submit my track "{track_name}" by {track_artist_name} for your consideration.',
+            f'\n[Sentence incorporating the song description: "{song_description}".]',
+            f'\nYou can listen here: {track_url}',
+            "\nHope you like it!",
+            "\n\nBest regards,",
+            f"\n{signature_name}",
+            f"\n---\nGENERATE THE {language.upper()} EMAIL BODY TEMPLATE NOW:",
+        ]
+        prompt_body = "\n".join(prompt_parts)
 
         # Configure Gemini model call
         model = genai.GenerativeModel(model_name)
-        # Adjust generation config as needed (temperature, safety settings)
-        generation_config = genai.GenerationConfig(
-             temperature=0.75, # Slightly creative but not too random
-             # max_output_tokens=250 # Limit output length if needed
-        )
-        # Standard safety settings
-        safety_settings=[
-             {"category": c, "threshold": "BLOCK_MEDIUM_AND_ABOVE"} for c in [
-                  "HARM_CATEGORY_HARASSMENT",
-                  "HARM_CATEGORY_HATE_SPEECH",
-                  "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                  "HARM_CATEGORY_DANGEROUS_CONTENT"
-                  ]
-             ]
+        generation_config = genai.GenerationConfig(temperature=0.75)
+        safety_settings=[ {"category": c, "threshold": "BLOCK_MEDIUM_AND_ABOVE"} for c in [ "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT" ] ]
 
-        print(f"[Email Gen] Generating email body for playlist '{playlist_name}'...")
-        response = model.generate_content(
-            prompt_body,
-            generation_config=generation_config,
-            safety_settings=safety_settings
-        )
+        print(f"[Email Gen] Generating {language} email template...")
+        response = model.generate_content(prompt_body, generation_config=generation_config, safety_settings=safety_settings)
 
-        # Access the generated text safely
-        # Check for potential blocks due to safety or other issues
+        # --- Process Response ---
         if not response.parts:
-             # Handle cases where generation might be blocked or empty
              block_reason = response.prompt_feedback.block_reason if response.prompt_feedback else 'Unknown'
-             print(f"[Email Gen] Warning: Gemini generation blocked or yielded no parts. Reason: {block_reason}")
-             # Try to get finish reason if available
              finish_reason = response.candidates[0].finish_reason if response.candidates else 'Unknown'
-             print(f"[Email Gen] Finish Reason: {finish_reason}")
+             raise ValueError(f"AI template generation failed or was empty. Reason: {block_reason}, Finish Reason: {finish_reason}")
 
-             # Depending on the reason, you might raise a specific error
-             if block_reason == 'SAFETY':
-                 raise ValueError("AI content generation blocked due to safety settings.")
-             else:
-                 raise ValueError(f"AI content generation failed or was empty. Reason: {block_reason}, Finish Reason: {finish_reason}")
+        template_body = response.text.strip()
+        if not template_body or '{{curator_name}}' not in template_body or '{{playlist_name}}' not in template_body:
+             print(f"[Email Gen] Warning: Generated template might be missing required placeholders. Generated text:\n{template_body}")
+             raise ValueError("AI failed to generate a valid template with required placeholders.")
 
+        # --- Generate the initial PREVIEW ---
+        preview_body = template_body.replace("{{curator_name}}", initial_curator_name).replace("{{playlist_name}}", initial_playlist_name)
 
-        email_body = response.text.strip() # Get the text and strip whitespace
-        if not email_body:
-             raise ValueError("AI generated an empty email body.")
-
-        print(f"[Email Gen] Email body generated successfully.")
-        return subject_line, email_body
+        print(f"[Email Gen] Template and preview generated successfully.")
+        return subject_line, preview_body, template_body
 
     except Exception as e:
-        print(f"[Email Gen] Error generating email content: {e}")
-        traceback.print_exc()
-        # Re-raise the exception to be caught by the calling route
-        raise Exception(f"AI email generation failed: {str(e)}")
+        print(f"[Email Gen] Error generating {language} email template/preview: {e}")
+        raise Exception(f"AI email generation failed: {str(e)}") # Re-raise cleaner exception
 
 
 # --- SMTP Email Sending ---
 def send_single_email(recipient, subject, body, sender_email, sender_password, smtp_server, smtp_port):
     """
-    Sends a single email using SMTP.
-
-    Args:
-        recipient (str): The recipient's email address.
-        subject (str): The email subject line.
-        body (str): The plain text email body.
-        sender_email (str): Sender's email address (from config).
-        sender_password (str): Sender's email password (from config).
-        smtp_server (str): SMTP server hostname (from config).
-        smtp_port (int): SMTP server port (from config).
-
-    Raises:
-        Exception on SMTP connection or sending errors.
+    Sends a single email using SMTP. (No changes needed here)
     """
     if not all([recipient, subject, body, sender_email, sender_password, smtp_server, smtp_port]):
         raise ValueError("Missing required parameters for sending email.")
@@ -176,32 +125,27 @@ def send_single_email(recipient, subject, body, sender_email, sender_password, s
     msg['Subject'] = subject
     msg['From'] = sender_email
     msg['To'] = recipient
-    # Ensure body is properly encoded (UTF-8 is standard)
     msg.set_content(body, subtype='plain', charset='utf-8')
 
-    server = None # Initialize server to None
+    server = None
     try:
-        # Connect to SMTP server
         print(f"[Email Send] Connecting to SMTP server: {smtp_server}:{smtp_port}")
-        # Consider adding timeout to SMTP connection
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=20)
-        server.ehlo() # Greet server
-        # Use STARTTLS for security (common for ports 587)
-        # If using port 465 (SSL), use smtplib.SMTP_SSL instead
-        if smtp_port == 587:
-            server.starttls()
-            server.ehlo() # Re-greet after TLS
-        # Login
+        if smtp_port == 465:
+             server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=20)
+        else:
+             server = smtplib.SMTP(smtp_server, smtp_port, timeout=20)
+             server.ehlo()
+             server.starttls()
+             server.ehlo()
         print(f"[Email Send] Logging in as {sender_email}...")
         server.login(sender_email, sender_password)
         print("[Email Send] SMTP login successful.")
-        # Send the message
         server.send_message(msg)
         print(f"[Email Send] Email successfully sent to {recipient}.")
 
     except smtplib.SMTPAuthenticationError as e:
         print(f"[Email Send] SMTP Authentication Error: {e}")
-        raise Exception(f"SMTP login failed for {sender_email}. Check email/password (or App Password for Gmail).") from e
+        raise Exception(f"SMTP login failed for {sender_email}. Check email/password/App Password.") from e
     except smtplib.SMTPException as e:
         print(f"[Email Send] SMTP Error: {e}")
         raise Exception(f"An SMTP error occurred while sending to {recipient}: {e}") from e
@@ -216,11 +160,11 @@ def send_single_email(recipient, subject, body, sender_email, sender_password, s
         traceback.print_exc()
         raise Exception(f"An unexpected error occurred during email sending: {e}") from e
     finally:
-        # Ensure server connection is closed
         if server:
             try:
                 print("[Email Send] Quitting SMTP server connection.")
                 server.quit()
             except smtplib.SMTPException:
-                # Ignore errors during quit if connection was already problematic
-                pass
+                pass # Ignore errors during quit
+
+# --- END OF (CORRECTED) FILE app/playlists/email.py ---

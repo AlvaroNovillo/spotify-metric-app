@@ -43,7 +43,7 @@
                  <span class="button-text">View Similar Artists</span>
                  <span class="button-loading hidden animate-pulse">Loading...</span>
              </a>
-             <a href="{{ url_for('playlists.playlist_finder', artist_id=main_artist.id) }}"
+             <a href="{{ url_for('playlists.show_playlist_finder', artist_id=main_artist.id) }}"
                 id="find-playlists-button"
                 class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300 relative disabled:opacity-70 disabled:cursor-wait">
                  <span class="button-text">Find Playlists for Artist</span>
