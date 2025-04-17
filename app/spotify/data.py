@@ -15,7 +15,7 @@ from .auth import get_spotify_client_credentials_client
 
 # --- Helper Function for Genre-Based Similarity (REFINED) ---
 # INCREASED candidates_per_genre default
-def fetch_similar_artists_by_genre(sp_client, artist_id, artist_name, artist_genres, candidates_per_genre=100000): # Fetch max allowed
+def fetch_similar_artists_by_genre(sp_client, artist_id, artist_name, artist_genres, candidates_per_genre=50): # Fetch max allowed
     """
     Fetches artists based on genre similarity using Spotify search. Fetches a larger pool.
 

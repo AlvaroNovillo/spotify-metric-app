@@ -1,4 +1,4 @@
-{# --- START OF (REVISED) FILE app/templates/similar_artists.html --- #}
+{# --- START OF FILE app/templates/similar_artists.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}Artists Similar to {{ source_artist_name }}{% endblock %}
@@ -6,19 +6,19 @@
 {% block content %}
 <h1 class="text-3xl font-bold mb-2 text-center">Artists Similar to {{ source_artist_name }}</h1>
 
-{# Description #}
+{# UPDATED description #}
 <p class="text-center text-gray-400 text-sm mb-1">(Combined results from Spotify genre matching and Last.fm scraping)</p>
 {% if search_genres %}
      <p class="text-center text-gray-500 text-xs mb-6">Spotify searched genres: {{ search_genres | join(', ') }}</p>
 {% endif %}
 
 
-{# --- Filter Form --- #}
+{# --- Filter Form (Applies to the combined list) --- #}
 <form method="GET" action="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
     <h2 class="text-xl font-semibold mb-4 text-center text-gray-300">Filter Results</h2>
     <p class="text-center text-xs text-gray-500 mb-4">(Filters based on Spotify data: Followers & Popularity)</p>
-    {# Filter inputs remain the same #}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        {# Followers Range #}
         <div>
             <label for="min_followers" class="block text-sm font-medium text-gray-400 mb-1">Min Followers</label>
             <input type="number" name="min_followers" id="min_followers" min="0" step="1000" value="{{ request.args.get('min_followers', '') }}" placeholder="e.g., 10000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
@@ -27,6 +27,7 @@
             <label for="max_followers" class="block text-sm font-medium text-gray-400 mb-1">Max Followers</label>
             <input type="number" name="max_followers" id="max_followers" min="0" step="1000" value="{{ request.args.get('max_followers', '') }}" placeholder="e.g., 500000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
         </div>
+        {# Popularity Range #}
         <div>
             <label for="min_popularity" class="block text-sm font-medium text-gray-400 mb-1">Min Popularity (0-100)</label>
             <input type="number" name="min_popularity" id="min_popularity" min="0" max="100" step="5" value="{{ request.args.get('min_popularity', '') }}" placeholder="e.g., 40" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
@@ -62,39 +63,45 @@
         {% for artist in artists %}
         <a href="{{ url_for('main.search_artist', query=artist.name) }}"
            class="block bg-gray-700 rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition duration-300 group border border-gray-600 hover:border-green-500">
-            {# Artist card content remains the same #}
             <div class="flex flex-col h-full">
+                {# Image #}
                 {% if artist.images %}
                     <img src="{{ artist.images[0].url }}" alt="{{ artist.name }}" class="w-full h-48 object-cover">
                 {% else %}
                     <div class="w-full h-48 bg-gray-600 flex items-center justify-center"><span class="text-gray-500 text-sm">No Image</span></div>
                 {% endif %}
+                {# Details #}
                 <div class="p-4 flex flex-col flex-grow">
                     <h3 class="text-lg font-semibold mb-1 truncate text-white group-hover:text-green-400 transition duration-300" title="{{ artist.name }}">{{ artist.name }}</h3>
-                    <span class="text-blue-400 group-hover:text-blue-300 text-xs mb-3 inline-block transition duration-300">View Details →</span>
+                    <span class="text-blue-400 group-hover:text-blue-300 text-xs mb-3 inline-block transition duration-300">View Details →</span> {# Links to our app's search #}
                     <div class="text-xs text-gray-300 mb-1">Followers: <span class="font-medium text-gray-100">{% if artist.followers and artist.followers.total is not none %}{{ "{:,}".format(artist.followers.total) }}{% else %}N/A{% endif %}</span></div>
                     <div class="text-xs text-gray-300">Popularity: <span class="font-medium text-gray-100">{% if artist.popularity is not none %}{{ artist.popularity }} / 100{% else %}N/A{% endif %}</span></div>
                     {% if artist.popularity is not none %}<div class="w-full bg-gray-600 rounded-full h-1 mt-1 mb-3"><div class="bg-green-500 h-1 rounded-full" style="width: {{ artist.popularity }}%"></div></div>
                     {% else %}<div class="w-full bg-gray-600 rounded-full h-1 mt-1 mb-3"><div class="bg-gray-500 h-1 rounded-full" style="width: 0%"></div></div>{% endif %}
+
+                    {# Spotify Genres #}
                     {% if artist.genres %}
-                        <div class="mt-auto pt-2 border-t border-gray-600"><p class="text-xs text-gray-500 uppercase mb-1">Top Genres</p><div class="flex flex-wrap gap-1">
-                            {% for genre in artist.genres[:3] %}
+                        <div class="mt-auto pt-2 border-t border-gray-600"><p class="text-xs text-gray-500 uppercase mb-1">Genres (Spotify)</p><div class="flex flex-wrap gap-1">
+                            {% for genre in artist.genres[:5] %} {# Limit displayed genres #}
                                 <span class="bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full text-xs">{{ genre }}</span>
                             {% endfor %}
-                            {% if artist.genres|length > 3 %}<span class="text-gray-500 text-xs ml-1">...</span>{% endif %}
+                            {% if artist.genres|length > 5 %}<span class="text-gray-500 text-xs ml-1">...</span>{% endif %}
                         </div></div>
                     {% endif %}
+
+                    {# REMOVED Last.fm Tags Section #}
+
                 </div>
             </div>
         </a>
         {% endfor %} {# Closes the artist loop #}
     </div>
 
-    {# --- Pagination Controls (FIXED) --- #}
+    {# --- Pagination Controls --- #}
     {% if total_pages > 1 %}
-    <nav aria-label="Pagination" class="mt-10 flex justify-center">
+       <nav aria-label="Pagination" class="mt-10 flex justify-center">
         <ul class="inline-flex items-center -space-x-px">
-            {# *** Helper to remove 'page' from args *** #}
+            {# Helper to remove 'page' from args #}
             {% set base_args = request.args.to_dict() %}
             {% set _ = base_args.pop('page', None) %}
 
@@ -102,7 +109,7 @@
             <li>
                 {% if current_page > 1 %}
                     <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page-1, **base_args) }}"
-                    class="py-2 px-3 ml-0 leading-tight text-gray-400 bg-gray-800 rounded-l-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
+                       class="py-2 px-3 ml-0 leading-tight text-gray-400 bg-gray-800 rounded-l-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
                         <span class="sr-only">Previous</span>
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
                     </a>
@@ -115,7 +122,7 @@
             </li>
 
             {# Page Numbers #}
-            {% set page_window = 2 %}
+            {% set page_window = 2 %} {# Show 2 pages before and after current #}
             {% for p in range(1, total_pages + 1) %}
                 {% if p == 1 or p == total_pages or (p >= current_page - page_window and p <= current_page + page_window) %}
                 <li>
@@ -123,21 +130,22 @@
                     <span aria-current="page" class="z-10 py-2 px-3 leading-tight text-green-400 bg-gray-700 border border-gray-600 cursor-default">{{ p }}</span>
                     {% else %}
                     <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=p, **base_args) }}"
-                    class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 border border-gray-700 hover:bg-gray-700 hover:text-white">{{ p }}</a>
+                       class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 border border-gray-700 hover:bg-gray-700 hover:text-white">{{ p }}</a>
                     {% endif %}
                 </li>
                 {% elif p == current_page - page_window - 1 or p == current_page + page_window + 1 %}
-                <li>
-                    <span class="py-2 px-3 leading-tight text-gray-500 bg-gray-800 border border-gray-700">...</span>
-                </li>
+                 <li>
+                     <span class="py-2 px-3 leading-tight text-gray-500 bg-gray-800 border border-gray-700">...</span>
+                 </li>
                 {% endif %}
             {% endfor %}
 
+
             {# Next Button #}
             <li>
-                {% if current_page < total_pages %}
+                 {% if current_page < total_pages %}
                     <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page+1, **base_args) }}"
-                    class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 rounded-r-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
+                       class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 rounded-r-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
                         <span class="sr-only">Next</span>
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg>
                     </a>
@@ -149,7 +157,7 @@
                 {% endif %}
             </li>
         </ul>
-    </nav>
+       </nav>
     {% endif %}
     {# End Pagination #}
 
@@ -164,7 +172,7 @@
 </div> {# End results-container #}
 
 
-{# Link back (unchanged) #}
+{# Link back #}
 <div class="text-center mt-10">
     <a href="{{ url_for('main.search_artist', query=source_artist_name) }}" class="inline-block px-6 py-2 bg-gray-600 rounded text-lg font-semibold hover:bg-gray-500 transition duration-300">
         ← Back to {{ source_artist_name }}
@@ -172,9 +180,9 @@
 </div>
 {% endblock %}
 
+{# JavaScript for loading indicator #}
 {% block extra_js %}
 <script>
-    // Hide loader and show results once the page content is loaded
     document.addEventListener('DOMContentLoaded', function() {
         const loader = document.getElementById('loading-indicator');
         const results = document.getElementById('results-container');
@@ -184,4 +192,4 @@
 </script>
 {% endblock %}
 
-{# --- END OF (REVISED) FILE app/templates/similar_artists.html --- #}
+{# --- END OF FILE app/templates/similar_artists.html --- #}

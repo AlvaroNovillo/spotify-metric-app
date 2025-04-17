@@ -5,20 +5,50 @@ from bs4 import BeautifulSoup
 import urllib.parse
 import traceback
 import time
+import random # Import random for delays
 import re
 
-# (Keep SESSION and headers definition)
+# Use a persistent session for requests
 SESSION = requests.Session()
+
+# --- UPDATED Headers (Mimic Browser More Closely) ---
 SESSION.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9', # Keep English first
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://www.last.fm/', # Generic Referer
+    'DNT': '1',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
 })
 
+# --- Optional Session Warm-up ---
+# You can uncomment this to make an initial request, though the session
+# should handle cookies on subsequent requests within the same run.
+# try:
+#     print("[Last.fm Scraper] Warming up session...")
+#     SESSION.get("https://www.last.fm/", timeout=10)
+#     print("[Last.fm Scraper] Session warm-up complete.")
+# except requests.exceptions.RequestException as warmup_err:
+#     print(f"[Last.fm Scraper] Warning: Session warm-up failed: {warmup_err}")
 
-# (Keep scrape_all_lastfm_similar_artists_names function as is)
+
+def _add_random_delay(min_sec=0.8, max_sec=2.5):
+    """Adds a random delay to mimic human browsing."""
+    delay = random.uniform(min_sec, max_sec)
+    # print(f"    -> Waiting {delay:.2f}s...") # Optional: uncomment for debugging
+    time.sleep(delay)
+
+
 def scrape_all_lastfm_similar_artists_names(artist_name, max_pages=5):
-    # ... function content from previous step ...
+    """
+    Scrapes similar artists for a given artist from ALL Last.fm pages (up to max_pages).
+    Includes random delays between page requests.
+    """
     if not artist_name:
         print("[Last.fm Scraper] Error: No artist name provided.")
         return []
@@ -31,25 +61,32 @@ def scrape_all_lastfm_similar_artists_names(artist_name, max_pages=5):
         try:
             encoded_artist = urllib.parse.quote_plus(artist_name)
             url = f"https://www.last.fm/music/{encoded_artist}/+similar?page={page}"
-            print(f"[Last.fm Scraper]  Fetching page {page}: {url}")
+            print(f"[Last.fm Scraper]  Preparing to fetch page {page}: {url}")
         except Exception as e:
             print(f"[Last.fm Scraper] Error encoding artist name '{artist_name}': {e}")
             return [] if page > 1 else None
 
         artists_found_on_page = 0
         try:
-            time.sleep(0.5)
+            _add_random_delay(1.0, 3.0) # Longer delay between page loads
             response = SESSION.get(url, timeout=20)
 
             if response.status_code == 404:
                 print(f"[Last.fm Scraper]  Page {page} returned 404. Assuming end of results or invalid artist.")
                 break
 
-            response.raise_for_status()
+            # Explicitly check for 406 after the request, before raise_for_status
+            if response.status_code == 406:
+                print(f"[Last.fm Scraper]  Received 406 Not Acceptable for page {page}. Headers likely incorrect or blocked. Stopping pagination.")
+                if page == 1: return None # Critical failure if first page is blocked
+                else: break # Stop if a later page is blocked
+
+            response.raise_for_status() # Raise for other errors (like 403, 5xx)
             soup = BeautifulSoup(response.text, 'html.parser')
 
             container = soup.find('ol', class_='similar-artists')
             if not container:
+                # ... (error checking as before) ...
                 print(f"[Last.fm Scraper]  Could not find container 'ol.similar-artists' on page {page}.")
                 if page == 1:
                      no_data_msg = soup.find(lambda tag: tag.name == "p" and "We don't have enough data" in tag.get_text())
@@ -63,11 +100,11 @@ def scrape_all_lastfm_similar_artists_names(artist_name, max_pages=5):
                 print(f"[Last.fm Scraper]  No 'li.similar-artists-item-wrap' found on page {page}. Assuming end of results.")
                 break
 
+            # Extract names (logic remains the same)
             for item in artist_items:
                 if item.find('div', attrs={'data-ad-container': True}): continue
                 artist_div = item.find('div', class_='similar-artists-item')
                 if not artist_div: continue
-
                 name_tag = artist_div.find('h3', class_='similar-artists-item-name')
                 if name_tag:
                     link_tag = name_tag.find('a', class_='link-block-target')
@@ -84,13 +121,12 @@ def scrape_all_lastfm_similar_artists_names(artist_name, max_pages=5):
 
             page += 1
 
-        except requests.exceptions.Timeout:
-            print(f"[Last.fm Scraper] Error: Request timed out for {artist_name} on page {page}.")
-            break
         except requests.exceptions.RequestException as e:
             status_code = e.response.status_code if e.response is not None else 'N/A'
-            print(f"[Last.fm Scraper] Error fetching page {page} for {artist_name}: {e} (Status: {status_code})")
-            break
+            print(f"[Last.fm Scraper] Request error fetching page {page} for {artist_name}: {e} (Status: {status_code})")
+            # Stop for request errors other than 404/406 (handled above)
+            if page == 1: return None
+            else: break
         except Exception as e:
             print(f"[Last.fm Scraper] Unexpected error scraping page {page} for {artist_name}: {e}")
             traceback.print_exc()
@@ -101,18 +137,10 @@ def scrape_all_lastfm_similar_artists_names(artist_name, max_pages=5):
     return final_list
 
 
-# --- REVISED Function to Scrape Events ---
 def scrape_lastfm_upcoming_events(artist_name):
     """
     Scrapes upcoming events for a given artist from Last.fm using the table structure.
-
-    Args:
-        artist_name (str): The name of the artist.
-
-    Returns:
-        list: A list of event dictionaries (date, title, venue, location, url).
-              Returns empty list if no upcoming events or on error.
-        None: On critical request error (timeout, connection error).
+    Includes a random delay.
     """
     if not artist_name:
         print("[Last.fm Events] Error: No artist name provided.")
@@ -120,135 +148,92 @@ def scrape_lastfm_upcoming_events(artist_name):
 
     try:
         encoded_artist = urllib.parse.quote_plus(artist_name)
-        # Target the main events page first, which should show upcoming
         url = f"https://www.last.fm/music/{encoded_artist}/+events"
-        print(f"[Last.fm Events] Fetching upcoming events for '{artist_name}' from: {url}")
+        print(f"[Last.fm Events] Preparing to fetch upcoming events for '{artist_name}' from: {url}")
     except Exception as e:
         print(f"[Last.fm Events] Error encoding artist name '{artist_name}': {e}")
         return []
 
     events = []
     try:
-        time.sleep(0.3)
-        response = SESSION.get(url, timeout=15)
+        _add_random_delay() # Add delay before the request
+        response = SESSION.get(url, timeout=15) # Uses updated SESSION headers
 
         if response.status_code == 404:
              print(f"[Last.fm Events] Page not found (404) for '{artist_name}' events.")
              return []
 
-        response.raise_for_status()
+        # Check for 406 specifically
+        if response.status_code == 406:
+            print(f"[Last.fm Events] Received 406 Not Acceptable for event data for '{artist_name}'. Headers might be incorrect or blocked.")
+            return [] # Treat as no results found
+
+        response.raise_for_status() # Raise for other errors
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Find the main section containing event tables
+        # (Parsing logic remains the same as previous step)
         events_section = soup.find('section', id='events-section')
         if not events_section:
-            # Check for older structure maybe? Or just no events section present
              no_events_msg = soup.find(lambda tag: tag.name == "p" and "No upcoming events listed" in tag.get_text(strip=True))
-             if no_events_msg:
-                  print("[Last.fm Events] Found 'no upcoming events' message.")
-             else:
-                  print(f"[Last.fm Events] Could not find main events section ('section#events-section') for '{artist_name}'.")
+             if no_events_msg: print("[Last.fm Events] Found 'no upcoming events' message.")
+             else: print(f"[Last.fm Events] Could not find main events section ('section#events-section') for '{artist_name}'.")
              return []
-
-        # Find all event rows directly within the section
-        # The structure seems to be <table> -> <tbody> -> <tr>
         event_items = events_section.find_all('tr', class_='events-list-item')
-
         if not event_items:
              print(f"[Last.fm Events] No event rows ('tr.events-list-item') found within the section.")
-             # Double-check for the "no upcoming events" message specifically within the section too
              no_events_msg_section = events_section.find(lambda tag: tag.name == "p" and "No upcoming events listed" in tag.get_text(strip=True))
-             if no_events_msg_section:
-                 print("[Last.fm Events] Found 'no upcoming events' message within the section.")
+             if no_events_msg_section: print("[Last.fm Events] Found 'no upcoming events' message within the section.")
              return []
-
         print(f"[Last.fm Events] Found {len(event_items)} potential event rows.")
-
         for item in event_items:
             event_data = {'date': 'N/A', 'title': 'N/A', 'venue': 'N/A', 'location': 'N/A', 'url': None, 'attendees': 'N/A'}
-
-            # Date: Combine spans within the time tag
             date_td = item.find('td', class_='events-list-item-date')
             if date_td:
                 month_span = date_td.find('span', class_='events-list-item-date-icon-month')
                 day_span = date_td.find('span', class_='events-list-item-date-icon-day')
-                if month_span and day_span:
-                    event_data['date'] = f"{month_span.text.strip()} {day_span.text.strip()}"
-                    # Optionally try to get the full date from attribute for sorting later
-                    time_tag = date_td.find('time')
-                    if time_tag and time_tag.get('datetime'):
-                        event_data['datetime'] = time_tag.get('datetime')
-
-
-            # Title & URL
+                if month_span and day_span: event_data['date'] = f"{month_span.text.strip()} {day_span.text.strip()}"
+                time_tag = date_td.find('time')
+                if time_tag and time_tag.get('datetime'): event_data['datetime'] = time_tag.get('datetime')
             event_td = item.find('td', class_='events-list-item-event')
             if event_td:
                 link_tag = event_td.find('a', class_='events-list-item-event-name')
                 if link_tag:
-                    # Find the inner span with itemprop="name" for the title
                     title_span = link_tag.find('span', itemprop='name')
-                    event_data['title'] = title_span.text.strip() if title_span else link_tag.text.strip() # Fallback
+                    event_data['title'] = title_span.text.strip() if title_span else link_tag.text.strip()
                     event_data['url'] = link_tag.get('href')
-                    if event_data['url'] and event_data['url'].startswith('/'):
-                        event_data['url'] = f"https://www.last.fm{event_data['url']}"
-
-            # Venue & Location
+                    if event_data['url'] and event_data['url'].startswith('/'): event_data['url'] = f"https://www.last.fm{event_data['url']}"
             venue_td = item.find('td', class_='events-list-item-venue')
             if venue_td:
                 venue_title_div = venue_td.find('div', class_='events-list-item-venue--title')
                 venue_address_div = venue_td.find('div', class_='events-list-item-venue--address')
-
                 venue = venue_title_div.text.strip() if venue_title_div else 'N/A'
                 location = venue_address_div.text.strip() if venue_address_div else 'N/A'
-
-                event_data['venue'] = venue
-                event_data['location'] = location
-
-            # Attendees (Optional - grab combined text)
+                event_data['venue'] = venue; event_data['location'] = location
             attendees_td = item.find('td', class_='events-list-item-attendees')
             if attendees_td:
-                # Combine text from all links inside
                 attendee_texts = [a.text.strip() for a in attendees_td.find_all('a')]
-                if attendee_texts:
-                     event_data['attendees'] = ' · '.join(attendee_texts)
-                else:
-                    # Fallback if no links, just grab text
-                    event_data['attendees'] = attendees_td.text.strip()
-
-
-            # Add if title was found
-            if event_data['title'] != 'N/A':
-                events.append(event_data)
-
+                event_data['attendees'] = ' · '.join(attendee_texts) if attendee_texts else attendees_td.text.strip()
+            if event_data['title'] != 'N/A': events.append(event_data)
         print(f"[Last.fm Events] Successfully extracted {len(events)} upcoming events.")
         return events
 
-    # --- Keep Error Handling As Is ---
-    except requests.exceptions.Timeout:
-        print(f"[Last.fm Events] Error: Request timed out for {artist_name}.")
-        return None
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response is not None else 'N/A'
-        print(f"[Last.fm Events] Error fetching event data for {artist_name}: {e} (Status: {status_code})")
-        if status_code != 404: return None
-        else: return []
+        print(f"[Last.fm Events] Request error fetching event data for {artist_name}: {e} (Status: {status_code})")
+        if status_code != 404: # 406 already handled by returning []
+             return None # Indicate other critical request failures
+        else:
+             return [] # Treat 404 as no events
     except Exception as e:
         print(f"[Last.fm Events] Unexpected error scraping events for {artist_name}: {e}")
         traceback.print_exc()
         return []
-    
 
-    # --- NEW Function to Scrape Tags ---
+
 def scrape_lastfm_tags(artist_name):
     """
     Scrapes artist tags from Last.fm.
-
-    Args:
-        artist_name (str): The name of the artist.
-
-    Returns:
-        list: A list of tag names (strings). Returns empty list on error or if none found.
-        None: On critical request error (timeout, connection error).
+    Includes a random delay.
     """
     if not artist_name:
         print("[Last.fm Tags] Error: No artist name provided.")
@@ -257,68 +242,56 @@ def scrape_lastfm_tags(artist_name):
     try:
         encoded_artist = urllib.parse.quote_plus(artist_name)
         url = f"https://www.last.fm/music/{encoded_artist}/+tags"
-        print(f"[Last.fm Tags] Fetching tags for '{artist_name}' from: {url}")
+        print(f"[Last.fm Tags] Preparing to fetch tags for '{artist_name}' from: {url}")
     except Exception as e:
         print(f"[Last.fm Tags] Error encoding artist name '{artist_name}': {e}")
         return []
 
     tags = []
     try:
-        time.sleep(0.3) # Be polite
-        response = SESSION.get(url, timeout=15)
+        _add_random_delay() # Add delay before the request
+        response = SESSION.get(url, timeout=15) # Uses updated SESSION headers
 
-        # Handle 404 - Artist might exist but have no tags page, or artist doesn't exist
         if response.status_code == 404:
-             print(f"[Last.fm Tags] Page not found (404) for '{artist_name}' tags.")
-             return [] # Treat as no tags
-
-        response.raise_for_status() # Raise exception for other errors
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Find the tags container using the provided HTML structure
-        tags_container = soup.find('ol', class_='big-tags')
-
-        if not tags_container:
-            print(f"[Last.fm Tags] Could not find tags container ('ol.big-tags') for '{artist_name}'.")
-            # Check for specific "no tags" messages if Last.fm has them
+            print(f"[Last.fm Tags] Page not found (404) for '{artist_name}' tags.")
             return []
 
-        # Find individual tag items
+        # Check for 406 specifically
+        if response.status_code == 406:
+            print(f"[Last.fm Tags] Received 406 Not Acceptable for tag data for '{artist_name}'. Headers might be incorrect or blocked.")
+            return [] # Treat as no results found
+
+        response.raise_for_status() # Raise for other errors
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # (Parsing logic remains the same)
+        tags_container = soup.find('ol', class_='big-tags')
+        if not tags_container: print(f"[Last.fm Tags] Could not find tags container ('ol.big-tags') for '{artist_name}'."); return []
         tag_items = tags_container.find_all('li', class_='big-tags-item-wrap')
-
-        if not tag_items:
-             print(f"[Last.fm Tags] No tag list items ('li.big-tags-item-wrap') found.")
-             return []
-
+        if not tag_items: print(f"[Last.fm Tags] No tag list items ('li.big-tags-item-wrap') found."); return []
         print(f"[Last.fm Tags] Found {len(tag_items)} potential tag items.")
-
         for item in tag_items:
             tag_div = item.find('div', class_='big-tags-item')
             if not tag_div: continue
-
             name_tag = tag_div.find('h3', class_='big-tags-item-name')
             if name_tag:
                 link_tag = name_tag.find('a', class_='link-block-target')
                 if link_tag and link_tag.text:
-                    tag_name = link_tag.text.strip().lower() # Get tag name and lowercase it
+                    tag_name = link_tag.text.strip().lower()
                     tags.append(tag_name)
-
         print(f"[Last.fm Tags] Successfully extracted {len(tags)} tags.")
         return tags
 
-    except requests.exceptions.Timeout:
-        print(f"[Last.fm Tags] Error: Request timed out for {artist_name}.")
-        return None
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response is not None else 'N/A'
-        print(f"[Last.fm Tags] Error fetching tag data for {artist_name}: {e} (Status: {status_code})")
-        if status_code != 404: return None
-        else: return []
+        print(f"[Last.fm Tags] Request error fetching tag data for {artist_name}: {e} (Status: {status_code})")
+        if status_code != 404: # 406 already handled by returning []
+             return None # Indicate other critical request failures
+        else:
+             return [] # Treat 404 as no tags
     except Exception as e:
         print(f"[Last.fm Tags] Unexpected error scraping tags for {artist_name}: {e}")
         traceback.print_exc()
         return []
-
-# --- END OF (REVISED) FILE app/lastfm/scraper.py ---
 
 # --- END OF (REVISED) FILE app/lastfm/scraper.py ---

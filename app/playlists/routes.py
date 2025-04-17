@@ -1,4 +1,4 @@
-# --- START OF FILE app/playlists/routes.py ---
+# --- START OF (REVISED) FILE app/playlists/routes.py ---
 import os
 import time
 import json
@@ -10,28 +10,26 @@ from flask import (
 import spotipy
 
 from . import playlists_bp
-# Import the NEW client credentials function
 from ..spotify.auth import get_spotify_client_credentials_client
-from ..spotify.data import fetch_similar_artists_by_genre # Needed for keyword generation
-from ..spotify.utils import parse_follower_count # Needed for sorting playlists
-from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply # Import scraper
-from .email import generate_email_content, send_single_email, format_error_message # Import email helpers
+from ..spotify.data import fetch_similar_artists_by_genre
+from ..spotify.utils import parse_follower_count
+# ***** Import Last.fm scrapers *****
+from ..lastfm.scraper import scrape_lastfm_tags, scrape_lastfm_upcoming_events # Import tag scraper too
+from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply
+from .email import generate_email_content, send_single_email, format_error_message
 
 
 @playlists_bp.route('/playlist-finder/<artist_id>', methods=['GET'])
 def playlist_finder(artist_id):
-    # Use Client Credentials client - no user login needed for Spotify public data
     sp = get_spotify_client_credentials_client()
     if not sp:
-        flash('Spotify API client could not be initialized. Check configuration.', 'error')
-        # Redirect back to search or show error? Redirecting to search.
+        flash('Spotify API client could not be initialized.', 'error')
         return redirect(url_for('main.search_artist'))
-
     if not artist_id:
         flash('No artist ID provided for playlist finding.', 'error')
         return redirect(url_for('main.search_artist'))
 
-    # Fetch artist details to get name and genres for context/keywords
+    # Fetch artist details first (needed for name regardless of search)
     try:
         print(f"[PlaylistFinder] Fetching details for artist ID: {artist_id}")
         artist = sp.artist(artist_id)
@@ -39,55 +37,58 @@ def playlist_finder(artist_id):
             flash(f"Could not find details for artist ID {artist_id}.", 'error')
             return redirect(url_for('main.search_artist'))
         artist_name = artist.get('name', 'Selected Artist')
-        artist_genres = artist.get('genres', [])
-        print(f"[PlaylistFinder] Context artist: {artist_name}")
-    except spotipy.exceptions.SpotifyException as e:
-        print(f"Spotify Error fetching artist details for playlist finder: {e}")
-        flash(f"Could not fetch artist details: {e.msg}", 'error')
-        return redirect(url_for('main.search_artist'))
+        artist_genres = artist.get('genres', []) # Spotify genres
+        print(f"[PlaylistFinder] Context artist: {artist_name}, Spotify Genres: {artist_genres}")
     except Exception as e:
-        print(f"Unexpected Error fetching artist details for playlist finder: {e}")
-        flash("An unexpected error occurred fetching artist details.", 'error')
+        print(f"Error fetching artist details for playlist finder: {e}")
+        flash("An error occurred fetching artist details.", 'error')
         traceback.print_exc()
         return redirect(url_for('main.search_artist'))
 
     # Get parameters from request query string
     selected_track_id = request.args.get('selected_track_id')
-    song_description_from_req = request.args.get('song_description', '') # For stickiness
+    song_description_from_req = request.args.get('song_description', '')
     user_keywords_raw = request.args.get('user_keywords', '')
-    # Determine if a search should be performed based on track selection
     search_performed = bool(selected_track_id)
 
     # --- Generator Function for Streaming HTTP Response ---
     def generate_response():
         top_tracks = []
         selected_track_name = None
-        market = 'US' # Default market for top tracks when no user context
+        market = 'US'
+        lastfm_tags = [] # Initialize Last.fm tags list
 
         # --- Part 1: Render Initial Page Structure (always runs) ---
         try:
-            # Fetch top tracks for the selection form *using the provided artist_id*
+            # Fetch top tracks for the selection form
             print(f"[PlaylistFinder Stream] Fetching top tracks for {artist_name} ({artist_id})...")
             top_tracks_result = sp.artist_top_tracks(artist_id, country=market)
-            if top_tracks_result and top_tracks_result.get('tracks'):
-                top_tracks = top_tracks_result['tracks']
-                print(f"[PlaylistFinder Stream]   Found {len(top_tracks)} top tracks in market {market}.")
-            else:
-                print(f"[PlaylistFinder Stream]   No top tracks found for artist {artist_id} in market {market}.")
-                # Template handles empty list
-        except spotipy.exceptions.SpotifyException as e:
-            print(f"[PlaylistFinder Stream] Spotify Error fetching top tracks: {e}")
-            # Log error, but proceed to render form without tracks if necessary
-        except Exception as e:
-            print(f"[PlaylistFinder Stream] Error fetching top tracks: {e}")
-            traceback.print_exc()
+            top_tracks = top_tracks_result.get('tracks', []) if top_tracks_result else []
+            print(f"[PlaylistFinder Stream]   Found {len(top_tracks)} top tracks.")
 
-        # Yield the initial HTML structure (base template + form)
+            # ***** Fetch Last.fm Tags (even before search starts, using artist_name) *****
+            # This happens early, providing tags context immediately if possible
+            print(f"[PlaylistFinder Stream] Fetching Last.fm tags for {artist_name}...")
+            tags_result = scrape_lastfm_tags(artist_name)
+            if tags_result is None:
+                 print("[PlaylistFinder Stream]  -> Warning: Error occurred fetching Last.fm tags.")
+                 # Don't flash here, stream already started. Log is sufficient.
+                 lastfm_tags = []
+            else:
+                 lastfm_tags = tags_result
+                 print(f"[PlaylistFinder Stream]  -> Found {len(lastfm_tags)} Last.fm tags: {lastfm_tags[:10]}") # Log first few
+
+        except Exception as e:
+            print(f"[PlaylistFinder Stream] Error during initial data fetch (tracks/tags): {e}")
+            traceback.print_exc()
+            # Proceed even if tracks/tags fail, form might still work
+
+        # Yield the initial HTML structure (pass fetched tags)
         yield render_template('playlist_finder_base.html',
-                              # Pass artist info fetched above
                               artist_id=artist_id,
                               artist_name=artist_name,
-                              artist_genres=artist_genres, # Pass genres too
+                              artist_genres=artist_genres, # Spotify genres
+                              lastfm_tags=lastfm_tags,     # ***** Pass Last.fm tags *****
                               top_tracks=top_tracks,
                               selected_track_id=selected_track_id,
                               song_description=song_description_from_req,
@@ -99,10 +100,10 @@ def playlist_finder(artist_id):
 
         # --- Part 2: Perform Search and Stream Results (only if track selected) ---
         if not search_performed:
-            print("[PlaylistFinder Stream] No track selected in request, stopping stream.")
-            return # Stop the generator
+            print("[PlaylistFinder Stream] No track selected, stopping stream.")
+            return
 
-        # --- Search Logic (largely same as before, uses fetched artist context) ---
+        # --- Search Logic ---
         final_playlists = {}
         keywords_list = []
         ps_session = None
@@ -110,12 +111,11 @@ def playlist_finder(artist_id):
         global_error_message = None
 
         try:
-            # Step 2.1: Get Selected Track Details (already have artist_name, artist_genres)
+            # Step 2.1: Get Selected Track Details
             print(f"[PlaylistFinder Stream] Search requested for track ID: {selected_track_id}")
             if not selected_track_id: raise ValueError("Selected track ID is missing.")
-
             selected_track = sp.track(selected_track_id, market=market)
-            if not selected_track: raise ValueError(f"Track ID '{selected_track_id}' not found or invalid.")
+            if not selected_track: raise ValueError(f"Track ID '{selected_track_id}' not found.")
             selected_track_name = selected_track['name']
             track_artist_name = selected_track['artists'][0]['name'] if selected_track['artists'] else artist_name
             print(f"[PlaylistFinder Stream] Selected track: '{selected_track_name}' by {track_artist_name}")
@@ -124,26 +124,37 @@ def playlist_finder(artist_id):
 
             # Step 2.2: Fetch Similar Artists (for keywords) - Use fetched artist context
             print("[PlaylistFinder Stream] Fetching similar genre artists for keywords...")
-            similar_artists = fetch_similar_artists_by_genre(sp, artist_id, artist_name, artist_genres, limit=5)
+            similar_artists = fetch_similar_artists_by_genre(sp, artist_id, artist_name, artist_genres)
 
-            # Step 2.3: Generate Keywords (uses fetched artist context)
+            # ***** Step 2.3: Generate Keywords (Include Last.fm Tags) *****
             keywords = set()
-            keywords.add(track_artist_name); keywords.add(artist_name)
-            keywords.add(f"{selected_track_name} {track_artist_name}")
-            for genre in artist_genres[:3]: keywords.add(genre.lower())
-            for sim_artist in similar_artists: keywords.add(sim_artist["name"])
+            # Add artist names
+            keywords.add(track_artist_name.lower())
+            keywords.add(artist_name.lower())
+            # Add track name + artist
+            keywords.add(f"{selected_track_name.lower()} {track_artist_name.lower()}")
+            # Add Spotify genres
+            for genre in artist_genres[:5]: # Use up to 5 Spotify genres
+                 keywords.add(genre.lower().strip())
+            # ***** Add Last.fm tags *****
+            for tag in lastfm_tags[:10]: # Use up to 10 Last.fm tags
+                 keywords.add(tag.lower().strip()) # Already lowercased in scraper, but be sure
+            # Add user keywords
             user_kws = [kw.strip().lower() for kw in user_keywords_raw.split(',') if kw.strip()]
             for kw in user_kws: keywords.add(kw)
-            keywords_list = list(filter(None, keywords))
+            # Add similar artist names
+            for sim_artist in similar_artists: keywords.add(sim_artist["name"].lower())
+
+            keywords_list = sorted(list(filter(None, keywords))) # Filter empty and sort
             if not keywords_list: raise ValueError("No valid keywords generated.")
             print(f"[PlaylistFinder Stream] Generated {len(keywords_list)} keywords: {keywords_list}")
             total_keywords = len(keywords_list)
+            # Yield JS to update UI with keywords used (optional, shown below)
+            js_keywords_preview = json.dumps(keywords_list[:8]) # Show first few
+            yield f'<script>updateKeywordsDisplay({js_keywords_preview});</script>\n'
 
-            # Steps 2.4 (Login), 2.5 (Scrape), 2.6 (Sort), 2.7 (Render), 2.8 (Yield JS)
-            # remain the same conceptually as in the previous version of this route
-            # Ensure they handle errors and yield progress correctly.
 
-            # Step 2.4: Credentials & Login (No change)
+            # Step 2.4: Credentials & Login
             ps_user = current_app.config.get('PLAYLIST_SUPPLY_USER')
             ps_pass = current_app.config.get('PLAYLIST_SUPPLY_PASS')
             if not ps_user or not ps_pass: raise ValueError("PlaylistSupply credentials missing.")
@@ -151,7 +162,7 @@ def playlist_finder(artist_id):
             ps_session = login_to_playlistsupply(ps_user, ps_pass)
             if not ps_session: raise ConnectionError("Failed to log in to PlaylistSupply.")
 
-            # Step 2.5: Scrape (No change in logic)
+            # Step 2.5: Scrape Playlists
             processed_keywords = 0; initial_progress = 10; scrape_progress_range = 80
             for keyword in keywords_list:
                 processed_keywords += 1
@@ -159,41 +170,55 @@ def playlist_finder(artist_id):
                 js_keyword = json.dumps(keyword); yield f'<script>updateProgress({progress}, "Searching: " + {js_keyword});</script>\n'
                 print(f"  Scraping '{keyword}' ({processed_keywords}/{total_keywords})")
                 scrape_result = scrape_playlistsupply(keyword, ps_user, ps_session)
-                time.sleep(0.4)
-                # ... (error handling and result processing for scrape_result as before) ...
+                time.sleep(0.4) # Keep delay between scrapes
+
                 if scrape_result is None: has_scrape_error = True; continue
                 elif isinstance(scrape_result, dict) and "error" in scrape_result:
                     has_scrape_error = True
-                    if scrape_result.get("error") == "session_invalid": global_error_message = "PS Session Invalid"; break
-                    continue
+                    error_info = scrape_result.get("message", scrape_result.get("error"))
+                    print(f"  -> Scrape error for '{keyword}': {error_info}")
+                    # Display error in progress bar?
+                    # yield f'<script>updateProgress({progress}, "Error: {js_keyword}");</script>\n'
+                    if scrape_result.get("error") == "session_invalid":
+                         global_error_message = "PlaylistSupply Session Invalid/Expired. Please restart app/check credentials."; break
+                    continue # Continue with next keyword on non-session errors
                 elif isinstance(scrape_result, list):
+                    count = 0
                     for pl in scrape_result:
                         if isinstance(pl, dict) and pl.get('url') and 'open.spotify.com/playlist/' in pl['url'] and pl['url'] not in final_playlists:
                             final_playlists[pl['url']] = pl
-                else: has_scrape_error = True
+                            count += 1
+                    # print(f"    -> Added {count} new unique playlists.")
+                else:
+                    # Unexpected result type
+                    print(f"  -> Unexpected scrape result type for '{keyword}': {type(scrape_result)}")
+                    has_scrape_error = True
 
-            # Step 2.6: Sort (No change)
+            if global_error_message: # If session became invalid, stop processing
+                 raise ConnectionError(global_error_message)
+
+            # Step 2.6: Sort Results
             sorted_playlists = []
             if final_playlists:
                 yield f'<script>updateProgress(95, "Sorting results...");</script>\n'
                 sorted_playlists = sorted(list(final_playlists.values()), key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
             print(f"[PlaylistFinder Stream] Aggregated {len(final_playlists)} unique playlists. Sorted {len(sorted_playlists)}.")
 
-            # Step 2.7: Render results HTML (No change)
+            # Step 2.7: Render Results HTML
             results_html = render_template('playlist_finder_results.html',
                                            selected_track_name=selected_track_name,
                                            playlists=sorted_playlists,
                                            has_scrape_error=has_scrape_error,
                                            search_performed=True,
-                                           global_error=global_error_message)
+                                           global_error=None) # Global error handled via exception now
 
-            # Step 2.8: Yield JS injection (No change)
+            # Step 2.8: Yield JS Injection
             js_escaped_html = json.dumps(results_html)
             js_escaped_playlist_data = json.dumps(sorted_playlists)
             js_safe_final_title = json.dumps(f"Playlist Results for {selected_track_name}")
             yield f'<script>injectResultsAndData({js_escaped_html}, {js_escaped_playlist_data}); document.title = {js_safe_final_title}; hideProgress();</script>\n'
 
-        # --- Error Handling (same as before) ---
+        # --- Error Handling ---
         except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e:
             error_occurred = str(e); print(f"[PlaylistFinder Stream] Error: {error_occurred}")
             js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Playlist Search Error: " + {js_safe_error});</script>\n'
@@ -205,11 +230,11 @@ def playlist_finder(artist_id):
             error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred)
             js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
         finally:
+            # Ensure progress is hidden even if errors occurred before final JS injection
             yield f'<script>hideProgress();</script>\n'
 
     # Return the streaming response
     return Response(stream_with_context(generate_response()), mimetype='text/html')
-
 
 # --- Email Related Routes (Modified to use Client Credentials Client) ---
 

@@ -13,9 +13,9 @@
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-4 text-center">Find Playlists & Contact Curators for {{ artist_name }}</h1>
-<p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, describe it, find relevant playlists, and contact curators (experimental).</p>
+<p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, describe it, find relevant playlists using Spotify/Last.fm keywords, and contact curators (experimental).</p>
 
-{# Disclaimer (Unchanged) #}
+{# Disclaimer #}
 <div class="max-w-7xl mx-auto bg-yellow-900 border border-yellow-700 text-yellow-100 px-4 py-3 rounded relative mb-8" role="alert">
   <strong class="font-bold">Warning:</strong>
   <span class="block sm:inline"> Playlist finding uses an external, undocumented service (PlaylistSupply) via scraping. Email generation uses AI (Gemini). Both require stored credentials and are <strong class="underline">experimental and likely to break</strong> without notice. Use responsibly and ensure compliance with all terms of service.</span>
@@ -26,7 +26,7 @@
 
     {# --- Left Column (Wider): Form --- #}
     <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-        {# Form action now points to the route with the specific artist ID #}
+        {# Form action points to the route with the specific artist ID #}
         <form method="GET" action="{{ url_for('playlists.playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
             {# 1. Track Selection #}
             <h2 class="text-xl font-semibold mb-5 text-center">1. Select Track by {{ artist_name }}</h2>
@@ -37,7 +37,7 @@
                          {# Use request.args.get for checking the *current* request's selection #}
                          <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required
                                {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
-                         {# Album Cover/Info (Unchanged) #}
+                         {# Album Cover/Info #}
                          {% if track.album and track.album.images %}
                             <img src="{{ track.album.images[-1].url }}" alt="{{ track.album.name }} Cover" class="w-12 h-12 rounded flex-shrink-0 object-cover mr-3 border border-gray-600">
                          {% else %}
@@ -47,7 +47,7 @@
                              <span class="block text-sm font-medium text-gray-100 truncate group-hover:text-white" title="{{ track.name }}">{{ track.name }}</span>
                              <span class="block text-xs text-gray-400 truncate" title="{{ track.artists | map(attribute='name') | join(', ') }}">{{ track.artists | map(attribute='name') | join(', ') }}</span>
                          </div>
-                         {# Checkmark indication (Unchanged) #}
+                         {# Checkmark indication #}
                          <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 group-has-[:checked]:border-green-500 group-has-[:checked]:bg-green-500 flex items-center justify-center transition-colors duration-200">
                               <svg class="w-3 h-3 text-white opacity-0 group-has-[:checked]:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                          </div>
@@ -60,7 +60,7 @@
                  <p class="text-center text-red-400 italic mb-4">Could not load top tracks for {{ artist_name }}.</p>
             {% endif %}
 
-             {# 2. Song Description (Unchanged, use passed value) #}
+             {# 2. Song Description #}
             <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Describe Your Song (for AI)</h2>
             <div class="mb-5">
                  <label for="song_description" class="block text-sm font-medium text-gray-300 mb-1">Enter a short description (mood, genre, selling points):</label>
@@ -70,7 +70,7 @@
                            required>{{ song_description }}</textarea> {# Uses value passed from route #}
              </div>
 
-            {# 3. Optional Keywords (Unchanged, use passed value) #}
+            {# 3. Optional Keywords #}
             <h2 class="text-xl font-semibold mb-3 text-center mt-6">3. Add Optional Search Keywords</h2>
              <div class="mb-5">
                  <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
@@ -80,7 +80,7 @@
                         class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
              </div>
 
-             {# --- Buttons Container (Unchanged) --- #}
+             {# --- Buttons Container --- #}
              <div class="space-y-4 mt-6">
                  <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg"
                          {% if not top_tracks %}disabled title="Top tracks need to load first"{% endif %}>
@@ -96,23 +96,37 @@
         </form>
     </div>{# End Left Column #}
 
-    {# --- Right Column: Status & Results (Unchanged) --- #}
+    {# --- Right Column: Status & Results --- #}
     <div class="lg:col-span-5 bg-gray-850 p-6 rounded-lg shadow-inner border border-gray-700 flex flex-col">
         <h2 class="text-xl font-semibold mb-5 text-center text-gray-300">Search Status & Results</h2>
-        <div id="progress-container" class="mb-6 p-4 bg-gray-700 rounded-lg shadow" style="display: none;">
+
+        {# --- Progress Bar & Keywords --- #}
+        <div id="progress-container" class="mb-4 p-4 bg-gray-700 rounded-lg shadow" style="display: none;">
             <div class="text-center text-sm font-medium text-gray-300 mb-2" id="progress-status">Initializing...</div>
             <div class="w-full bg-gray-600 rounded-full h-4 overflow-hidden">
                 <div id="progress-bar" class="bg-green-500 h-4 rounded-full transition-all duration-300 ease-linear" style="width: 0%"></div>
             </div>
+             {# Keywords Display Area #}
+             <div id="keywords-display-area" class="mt-3 text-xs text-gray-400" style="display: none;">
+                 <strong>Using keywords:</strong> <span id="keywords-list"></span>...
+             </div>
+             {# End Keywords Display Area #}
         </div>
+
+        {# Results container #}
         <div id="playlist-results-container" class="flex-grow min-h-[200px]">
             {% if not search_performed and not loading %}
                 <div class="flex items-center justify-center h-full">
                      <p class="text-center text-gray-500 italic">Select a track by {{ artist_name }}, describe it, and click "Find Playlists" to see results.</p>
+                     {# Display Spotify Genres and Last.fm Tags available even before search #}
+                     {% set combined_initial_tags = ((artist_genres or []) + (lastfm_tags or [])) | map('lower') | unique | sort %}
+                     {% endif %}
                 </div>
             {% endif %}
             {# Results loaded here via JS #}
         </div>
+
+        {# Email Status Container #}
          <div id="email-status-container" class="mt-6 hidden">
               <h3 class="text-lg font-semibold mb-3 text-center text-gray-300">Email Sending Progress</h3>
               <div class="bg-gray-700 p-4 rounded-lg shadow max-h-60 overflow-y-auto custom-scrollbar">
@@ -123,7 +137,7 @@
 
 </div>{# End Main Grid #}
 
-{# --- Email Preview Overlay (Unchanged) --- #}
+{# --- Email Preview Overlay --- #}
 <div id="email-preview-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col">
         <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Email Preview</h2>
@@ -159,14 +173,14 @@
 </div>
 {% endblock %}
 
-{# --- JavaScript (Modified fetch URLs) --- #}
+{# --- JavaScript --- #}
 {% block extra_js %}
 <script>
     // Global variable to hold artist ID (can be useful)
     const currentArtistId = {{ artist_id | tojson }}; // Get artist_id from Flask context
 
-    // --- Playlist Search Progress (Unchanged) ---
-    function updateProgress(percentage, statusText) { /* ... as before ... */
+    // --- Playlist Search Progress ---
+    function updateProgress(percentage, statusText) {
         const progressBar = document.getElementById('progress-bar');
         const progressStatus = document.getElementById('progress-status');
         const container = document.getElementById('progress-container');
@@ -178,13 +192,13 @@
              progressStatus.innerHTML = `<span class="font-semibold text-green-400">${displayStatus}</span> (${percentage}%)`;
         }
     }
-    function hideProgress() { /* ... as before ... */
+    function hideProgress() {
         const progressContainer = document.getElementById('progress-container');
         if (progressContainer) progressContainer.style.display = 'none';
         const findBtn = document.getElementById('find-playlists-button');
         if (findBtn) { findBtn.disabled = false; findBtn.innerHTML = 'Find Playlists'; }
     }
-    function showSearchError(errorMessage) { /* ... as before ... */
+    function showSearchError(errorMessage) {
         hideProgress();
         const resultsContainer = document.getElementById('playlist-results-container');
         const displayError = errorMessage.replace(/</g, "<").replace(/>/g, ">");
@@ -201,7 +215,21 @@
         if (emailButton) emailButton.classList.add('hidden');
     }
 
-    function showEmailButton() { /* ... as before ... */
+    // --- Keywords Display ---
+     function updateKeywordsDisplay(keywords) {
+        const displayArea = document.getElementById('keywords-display-area');
+        const listSpan = document.getElementById('keywords-list');
+        if (displayArea && listSpan && keywords && keywords.length > 0) {
+            // Join first few keywords for preview
+            listSpan.textContent = keywords.join(', ');
+            displayArea.style.display = 'block';
+        } else if (displayArea) {
+            displayArea.style.display = 'none'; // Hide if no keywords
+        }
+    }
+
+    // --- Show/Hide Email Button ---
+    function showEmailButton() {
         const btn = document.getElementById('send-emails-button');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
         if (btn && playlistsDataInput && playlistsDataInput.value && playlistsDataInput.value !== '[]') {
@@ -211,7 +239,8 @@
         }
     }
 
-    function injectResultsAndData(resultsHtml, playlistData) { /* ... as before ... */
+    // --- Inject Results ---
+    function injectResultsAndData(resultsHtml, playlistData) {
         const resultsContainer = document.getElementById('playlist-results-container');
         if (resultsContainer) resultsContainer.innerHTML = resultsHtml;
         const hiddenInput = document.getElementById('playlists-data-hidden');
@@ -220,7 +249,7 @@
         showEmailButton(); // Check if button should be shown after injecting data
     }
 
-    // --- Email Preview & Sending Logic (Updated Fetch URLs) ---
+    // --- Email Preview & Sending Logic ---
     function showEmailPreview(event) {
         event.preventDefault();
         const overlay = document.getElementById('email-preview-overlay');
@@ -234,7 +263,6 @@
         const songDescriptionInput = document.getElementById('song_description');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
-        // ... (Input validation as before) ...
         if (!selectedTrackInput) { alert('Please select a track first.'); return; }
         if (!songDescriptionInput || !songDescriptionInput.value.trim()) { alert('Please enter a song description.'); songDescriptionInput.focus(); return; }
         if (!playlistsDataInput || !playlistsDataInput.value) { alert('Playlist data not found. Perform search first.'); return; }
@@ -245,36 +273,35 @@
         const trackId = selectedTrackInput.value;
         const description = songDescriptionInput.value.trim();
 
-        // Show loading state (unchanged)
+        // Show loading state
         subjectEl.textContent = 'Generating...'; bodyEl.textContent = 'Generating preview content with AI...';
         if (confirmBtn) confirmBtn.disabled = true; if (loadingText) loadingText.classList.remove('hidden'); if (buttonText) buttonText.classList.add('hidden'); if (overlay) overlay.classList.remove('hidden');
 
-        // --- Use url_for to get the correct endpoint URL ---
         const previewUrl = "{{ url_for('playlists.generate_preview_email_route') }}";
         fetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ track_id: trackId, song_description: description, playlist: firstPlaylist })
         })
-        .then(response => { /* ... (Response handling as before) ... */
+        .then(response => {
             if (!response.ok) { return response.json().then(err => { throw new Error(err.error || `HTTP error ${response.status}`) }); }
             return response.json();
         })
-        .then(data => { /* ... (Success handling as before) ... */
+        .then(data => {
             if (data.error) { throw new Error(data.error); }
             subjectEl.textContent = data.subject || '[Subject Generation Failed]';
             bodyEl.textContent = data.body || '[Body Generation Failed]';
             if (confirmBtn) confirmBtn.disabled = false;
         })
-        .catch(error => { /* ... (Error handling as before) ... */
+        .catch(error => {
             console.error("Error fetching email preview:", error); subjectEl.textContent = 'Error'; bodyEl.textContent = `Failed to generate preview: ${error.message}`; if (confirmBtn) confirmBtn.disabled = true;
         })
-        .finally(() => { /* ... (Loading state reset as before) ... */
+        .finally(() => {
              if (loadingText) loadingText.classList.add('hidden'); if (buttonText) buttonText.classList.remove('hidden');
         });
     }
 
-    function cancelEmailSend() { /* ... as before ... */
+    function cancelEmailSend() {
          const overlay = document.getElementById('email-preview-overlay'); if (overlay) overlay.classList.add('hidden');
     }
 
@@ -287,7 +314,6 @@
         const songDescriptionInput = document.getElementById('song_description');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
-        // ... (Input validation as before) ...
         if (!selectedTrackInput || !songDescriptionInput || !playlistsDataInput) { console.error("Missing data for sending emails."); return; }
         const trackId = selectedTrackInput.value; const description = songDescriptionInput.value.trim();
         let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { console.error("Cannot parse playlist data for sending."); return; }
@@ -295,12 +321,11 @@
         if (playlistsToContact.length === 0) { console.log("No playlists with emails to contact."); alert("No playlists with valid emails found in results to contact."); return; }
 
 
-        // Update UI (unchanged)
+        // Update UI
         if (sendButton) { sendButton.disabled = true; sendButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>'; }
         if (emailLog) emailLog.textContent = 'Initializing email process...\n';
         if (emailStatusContainer) emailStatusContainer.style.display = 'block';
 
-        // --- Use url_for to get the correct endpoint URL ---
         const sendUrl = "{{ url_for('playlists.send_emails_route') }}";
         console.log("Starting Fetch POST for email sending:", sendUrl);
         fetch(sendUrl, {
@@ -318,18 +343,25 @@
              function processStream({ done, value }) {
                  if (done) {
                      console.log("Email stream finished.");
-                      if (sendButton) { sendButton.disabled = false; sendButton.innerHTML = '<svg ...> Contact Curators (Preview First)</svg>'; } // Reset button
+                      // Reset button only after stream is truly done
+                      if (sendButton) {
+                          sendButton.disabled = false;
+                          // Restore original button content with SVG
+                          sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Contact Curators (Preview First)';
+                      }
                      return;
                  }
                  const chunk = decoder.decode(value, { stream: true });
                  // Process server-sent events (SSE)
                  const lines = chunk.split('\n');
                  lines.forEach(line => {
+                     line = line.trim(); // Trim whitespace
                      if (line.startsWith('event:')) {
                          const eventType = line.substring(6).trim();
-                         // Find corresponding data line (usually next)
-                         const dataLine = lines.find(l => l.startsWith('data:'));
-                         if (dataLine) {
+                         // Find corresponding data line (can be immediately after or later in the same chunk)
+                         const dataLineIndex = lines.findIndex(l => l.trim().startsWith('data:'));
+                         if (dataLineIndex !== -1 && dataLineIndex > lines.indexOf(line)) { // Ensure data is *after* event
+                             const dataLine = lines[dataLineIndex].trim();
                              const eventData = dataLine.substring(5).trim();
                              console.log(`SSE Event: ${eventType}, Data: ${eventData}`);
                              if (emailLog) {
@@ -341,11 +373,7 @@
                                   emailLog.textContent += logPrefix + eventData + '\n';
                                   emailLog.scrollTop = emailLog.scrollHeight; // Auto-scroll
                              }
-                             if(eventType === 'done' && sendButton){
-                                 sendButton.disabled = false;
-                                 // Reset button text/icon properly
-                                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Contact Curators (Preview First)';
-                             }
+                             // Removed button reset from here, handled in 'done' check
                          }
                      }
                  });
@@ -357,11 +385,15 @@
         .catch(error => {
              console.error("Error sending emails:", error);
              if (emailLog) emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
-             if (sendButton) { sendButton.disabled = false; sendButton.innerHTML = '<svg ...> Contact Curators (Preview First)</svg>'; } // Reset button on error
+             // Reset button on error
+             if (sendButton) {
+                 sendButton.disabled = false;
+                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg> Contact Curators (Preview First)';
+             }
         });
     }
 
-     // --- Find Playlist Form Submit Listener (Unchanged) ---
+     // --- Find Playlist Form Submit Listener ---
      const findForm = document.getElementById('playlist-finder-form');
      if(findForm) {
          findForm.addEventListener('submit', function(event) {
@@ -371,26 +403,29 @@
              if (!descriptionInput || !descriptionInput.value.trim()) { alert("Please enter a song description."); descriptionInput.focus(); event.preventDefault(); return; }
              const findButton = findForm.querySelector('#find-playlists-button');
              if(findButton) { findButton.disabled = true; findButton.innerHTML = '<span class="animate-pulse">Finding...</span>'; }
-             // Clear previous results/logs (unchanged)
+             // Clear previous results/logs
              const emailButton = document.getElementById('send-emails-button'); if (emailButton) emailButton.classList.add('hidden');
              const emailStatusContainer = document.getElementById('email-status-container'); if (emailStatusContainer) { emailStatusContainer.style.display = 'none'; emailStatusContainer.querySelector('#email-log').textContent = ''; }
              const progressContainer = document.getElementById('progress-container'); if (progressContainer) progressContainer.style.display = 'block';
              const resultsContainer = document.getElementById('playlist-results-container'); if (resultsContainer) { resultsContainer.innerHTML = ''; }
+             // Reset keywords display on new search
+             const keywordsDisplay = document.getElementById('keywords-display-area'); if (keywordsDisplay) keywordsDisplay.style.display = 'none';
          });
      }
 
 </script>
 {% endblock %}
 
-{# --- Keep extra_css block (Unchanged) --- #}
+{# --- Extra CSS for scrollbar --- #}
 {% block extra_css %}
 <style>
-    /* Custom scrollbar styles ... (unchanged) */
+    /* Custom scrollbar styles */
     .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #374151; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4b5563 #374151; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #374151; /* gray-700 */ border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; /* gray-600 */ border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; /* gray-500 */ }
+    /* For Firefox */
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4b5563 #374151; /* thumb track */ }
 </style>
 {% endblock %}
 {# --- END OF FILE templates/playlist_finder_base.html --- #}
