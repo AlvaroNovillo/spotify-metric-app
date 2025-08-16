@@ -1,4 +1,4 @@
-{# --- START OF (FULLY REVISED) FILE templates/playlist_finder_base.html --- #}
+{# --- START OF (REVISED) FILE templates/playlist_finder_base.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}
@@ -70,7 +70,7 @@
                  <p class="text-center text-red-400 italic mb-4">Could not load tracks for {{ artist_name }}.</p>
             {% endif %}
 
-            {# --- (The rest of the form: optional keywords and buttons are unchanged) --- #}
+            {# --- Keywords and Action Buttons --- #}
             <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Add Optional Search Keywords</h2>
             <div class="mb-5">
                  <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
@@ -78,7 +78,11 @@
             </div>
              <div class="space-y-4 mt-6">
                  <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Find Playlists</button>
-                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden">Contact Curators...</button>
+                 {# --- Action buttons for after search --- #}
+                 <div id="post-search-actions" class="hidden flex flex-col sm:flex-row gap-4">
+                    <button type="button" id="contact-curators-button" onclick="showEmailOverlay()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Contact Curators...</button>
+                    <button type="button" id="show-download-modal-btn" onclick="showPlaylistDownloadModal()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Download Results...</button>
+                 </div>
              </div>
         </form>
     </div>
@@ -111,29 +115,20 @@
 
 </div>{# End Main Grid #}
 
-{# --- REVISED Email Overlay --- #}
+{# --- REVISED Email Overlay (unchanged) --- #}
 <div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
         <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Generate & Send Outreach Emails</h2>
-
-        {# Top Section: Inputs & Generate Button #}
         <div class="mb-4 border-b border-gray-700 pb-4 flex-shrink-0">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                      <label for="song-description-editor" class="block text-gray-300 text-sm font-semibold mb-1">1. Song Description (for AI):</label>
-                     <textarea id="song-description-editor" rows="5"
-                               placeholder="e.g., A dreamy shoegaze track with ethereal vocals..."
-                               class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
+                     <textarea id="song-description-editor" rows="5" placeholder="e.g., A dreamy shoegaze track with ethereal vocals..." class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
                 </div>
                 <div>
                      <label for="language-selector" class="block text-gray-300 text-sm font-semibold mb-1">2. Email Language:</label>
                      <select id="language-selector" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm h-[42px]">
-                         <option value="English" selected>English</option>
-                         <option value="Spanish">Spanish</option>
-                         <option value="French">French</option>
-                         <option value="German">German</option>
-                         <option value="Portuguese">Portuguese</option>
-                         <option value="Italian">Italian</option>
+                         <option value="English" selected>English</option> <option value="Spanish">Spanish</option> <option value="French">French</option> <option value="German">German</option> <option value="Portuguese">Portuguese</option> <option value="Italian">Italian</option>
                      </select>
                      <div class="mt-2">
                         <label for="bcc-email-input" class="block text-gray-300 text-sm font-semibold mb-1">3. Send a copy (BCC) to (optional):</label>
@@ -146,8 +141,6 @@
                  <span class="button-loading animate-pulse hidden">Generating...</span>
             </button>
         </div>
-
-        {# Bottom Section: Preview & Edit (Initially Hidden) #}
         <div id="email-preview-edit-section" class="hidden flex-grow min-h-0 overflow-hidden flex flex-col">
             <p class="text-sm text-gray-400 mb-1 flex-shrink-0">4. Review & Edit the generated template below.</p>
             <p class="text-xs text-yellow-400 mb-4 text-center flex-shrink-0">
@@ -172,14 +165,37 @@
                 </div>
             </div>
         </div>
-
-        {# Footer Buttons #}
         <div class="mt-4 pt-4 border-t border-gray-600 flex justify-end space-x-4 flex-shrink-0">
             <button type="button" onclick="cancelEmailSend()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition duration-200">Cancel</button>
             <button type="button" id="confirm-send-button" onclick="confirmAndSendEmails()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition duration-200 hidden disabled:opacity-50">
                 Confirm & Send All
             </button>
         </div>
+    </div>
+</div>
+
+{# --- NEW: Playlist Download Modal --- #}
+<div id="download-playlist-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-600">
+        <h3 class="text-xl font-bold mb-4 text-center text-green-300">Download Playlist Results</h3>
+        <p class="text-sm text-gray-400 text-center mb-6">Select the data columns you want to include in your export file.</p>
+        <form id="download-playlist-form">
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Playlist Name</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="url" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Spotify URL</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="owner_name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Curator Name</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="email" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Curator Email</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="followers" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Followers</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="tracks_total" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Total Tracks</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="description" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Description</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="found_by" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Found By Keyword</span></label>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-3">
+                <button type="button" onclick="hidePlaylistDownloadModal()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Cancel</button>
+                <button type="button" data-format="csv" class="download-playlist-btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Export as CSV</button>
+                <button type="button" data-format="xlsx" class="download-playlist-btn px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">Export as XLSX</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -193,6 +209,8 @@
 
 {# --- JavaScript --- #}
 {% block extra_js %}
+{# --- NEW: Add the SheetJS library for XLSX export --- #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
     // Global variable to hold artist ID (can be useful)
     const currentArtistId = {{ artist_id | tojson }}; // Get artist_id from Flask context
@@ -257,22 +275,27 @@
         }
     }
 
-     // --- REVISED: Inject Results and Trigger Filter Setup ---
-     function injectResultsAndData(resultsHtml, playlistData, keywords) {
+    function injectResultsAndData(resultsHtml, playlistData, keywords) {
         const resultsContainer = document.getElementById('playlist-results-container');
         if (resultsContainer) resultsContainer.innerHTML = resultsHtml;
-
-        const hiddenInput = document.getElementById('playlists-data-hidden');
-        allFoundPlaylists = playlistData || []; // Store data globally
-        if (hiddenInput) hiddenInput.value = JSON.stringify(allFoundPlaylists);
+        allFoundPlaylists = playlistData || []; 
         
-        showEmailButton();
+        updateActionButtons();
 
-        // Populate the multi-select filter UI
         if (allFoundPlaylists.length > 0 && keywords && keywords.length > 0) {
             setupMultiSelectFilter(keywords);
         }
     }
+
+    function updateActionButtons() {
+        const actionsContainer = document.getElementById('post-search-actions');
+        if (actionsContainer && allFoundPlaylists && allFoundPlaylists.length > 0) {
+             actionsContainer.classList.remove('hidden');
+        } else if (actionsContainer) {
+             actionsContainer.classList.add('hidden');
+        }
+    }
+    
 
     // --- NEW: Function to create and manage the multi-select dropdown filter ---
     function setupMultiSelectFilter(keywords) {
@@ -717,24 +740,152 @@
         });
     }
 
-    // --- Add a DOMContentLoaded listener to run our setup functions ---
+     // --- REVISED: Playlist Download Modal & Client-Side File Generation ---
+     function showPlaylistDownloadModal() {
+        const modal = document.getElementById('download-playlist-modal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function hidePlaylistDownloadModal() {
+        const modal = document.getElementById('download-playlist-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function generateAndDownloadFile(format) {
+        // 1. Get the currently filtered list of playlists
+        const optionsContainer = document.getElementById('filter-options-container');
+        const selectedCheckboxes = optionsContainer.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedKeywords = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        let filteredPlaylists = [];
+        if (selectedKeywords.length === 0) {
+            filteredPlaylists = allFoundPlaylists; // No filter, use all
+        } else {
+            filteredPlaylists = allFoundPlaylists.filter(playlist => {
+                const foundBy = playlist.found_by || [];
+                return foundBy.some(keyword => selectedKeywords.includes(keyword));
+            });
+        }
+        
+        if (filteredPlaylists.length === 0) {
+            alert("There are no playlists in the current view to download.");
+            return;
+        }
+
+        // 2. Get selected columns from the download modal
+        const selectedColumns = Array.from(document.querySelectorAll('#download-playlist-form input[name="columns"]:checked'))
+                                     .map(cb => cb.value);
+        if (selectedColumns.length === 0) {
+            alert('Please select at least one column to export.');
+            return;
+        }
+
+        // 3. Map the data to a cleaner format with user-friendly headers
+        const columnHeaders = {
+            name: 'Playlist Name', url: 'Spotify URL', owner_name: 'Curator Name', email: 'Curator Email',
+            followers: 'Followers', tracks_total: 'Total Tracks', description: 'Description',
+            found_by: 'Found By Keyword'
+        };
+        
+        const dataForExport = filteredPlaylists.map(pl => {
+            let row = {};
+            selectedColumns.forEach(colKey => {
+                const header = columnHeaders[colKey];
+                let value = pl[colKey];
+                // Ensure array values are nicely formatted
+                if (Array.isArray(value)) {
+                    value = value.join(', ');
+                }
+                row[header] = value !== undefined && value !== null ? value : '';
+            });
+            return row;
+        });
+
+        // 4. Generate the file content based on the chosen format
+        const selectedTrackEl = document.querySelector('.playlist-results-header .text-green-400'); // A bit fragile, but works
+        const trackName = document.querySelector('input[name="selected_track_id"]:checked').parentElement.dataset.trackName || 'selected_track';
+        const safeTrackName = trackName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const filename = `playlists_for_${safeTrackName}.${format}`;
+
+        let blob;
+        if (format === 'csv') {
+            const csvContent = convertToCSV(dataForExport);
+            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        } else if (format === 'xlsx') {
+            const worksheet = XLSX.utils.json_to_sheet(dataForExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Playlists');
+            const xlsxData = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        } else {
+            return; // Should not happen
+        }
+        
+        // 5. Trigger the download in the browser
+        const link = document.createElement("a");
+        if (link.download !== undefined) { // Check for browser support
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url); // Clean up
+        }
+        
+        hidePlaylistDownloadModal();
+    }
+
+    function convertToCSV(objArray) {
+        const array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
+        let str = '';
+        const headers = Object.keys(array[0]);
+        str += headers.join(',') + '\r\n';
+
+        for (let i = 0; i < array.length; i++) {
+            let line = '';
+            for (let index in array[i]) {
+                if (line != '') line += ','
+                let value = array[i][index].toString();
+                // Escape quotes by doubling them, and wrap the whole field in quotes if it contains commas or newlines
+                if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                    value = '"' + value.replace(/"/g, '""') + '"';
+                }
+                line += value;
+            }
+            str += line + '\r\n';
+        }
+        return str;
+    }
+
+    function setupPlaylistDownloadButtons() {
+        const downloadButtons = document.querySelectorAll('.download-playlist-btn');
+        downloadButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                const format = event.target.dataset.format;
+                generateAndDownloadFile(format);
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         setupSongSearch();
+        setupPlaylistDownloadButtons();
         
-        // --- (Form submit listener remains the same) ---
         const findForm = document.getElementById('playlist-finder-form');
         if(findForm) {
             findForm.addEventListener('submit', function(event) {
                 const selectedRadio = findForm.querySelector('input[name="selected_track_id"]:checked');
                 if (!selectedRadio) {
                     alert("Please select a track before finding playlists.");
-                    event.preventDefault();
-                    return;
+                    event.preventDefault(); return;
                 }
                 const findButton = findForm.querySelector('#find-playlists-button');
                 if(findButton) { findButton.disabled = true; findButton.innerHTML = '<span class="animate-pulse">Finding...</span>'; }
-                const emailButton = document.getElementById('contact-curators-button');
-                if (emailButton) emailButton.classList.add('hidden');
+                const actionsContainer = document.getElementById('post-search-actions');
+                if (actionsContainer) actionsContainer.classList.add('hidden');
             });
         }
     });

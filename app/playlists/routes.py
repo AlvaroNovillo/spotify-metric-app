@@ -8,6 +8,8 @@ from email.message import EmailMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+import pandas as pd
+import io
 from flask import (
     render_template, redirect, url_for, flash, request, Response,
     stream_with_context, jsonify, current_app
@@ -467,5 +469,7 @@ def send_emails_route():
             yield_message('done', final_message)
 
     return Response(email_stream(), mimetype='text/event-stream')
+
+
 
 # --- END OF (REVISED) FILE app/playlists/routes.py ---
