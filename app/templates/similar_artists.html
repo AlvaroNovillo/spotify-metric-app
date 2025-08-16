@@ -42,11 +42,32 @@
         </button>
     </div>
 </div>
+
+{# --- NEW: Aggregated Genres Display Section --- #}
+{% if aggregated_genres %}
+<div class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
+    <h3 class="text-xl font-semibold mb-4 text-center text-gray-300">Common Genres Across Similar Artists</h3>
+    <p class="text-center text-xs text-gray-500 mb-5">(Top genres from the {{ total_pool_size }} artists found before filtering)</p>
+    <div class="flex flex-wrap justify-center items-center gap-3">
+        {# Display the top 20 most common genres #}
+        {% for genre_data in aggregated_genres[:20] %}
+            <div class="flex items-center bg-gray-700 text-gray-200 px-3 py-1 rounded-full text-sm shadow">
+                <span class="capitalize">{{ genre_data.display_name }}</span>
+                <span class="ml-2 text-xs bg-gray-600 text-gray-300 rounded-full px-2 py-0.5">{{ genre_data.count }}</span>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{# --- END NEW SECTION --- #}
+
+
 {# --- Loading Indicator --- #}
 <div id="loading-indicator" class="text-center py-10">
     <div class="loader inline-block border-4 border-gray-700 border-t-green-500 rounded-full w-12 h-12 animate-spin"></div>
     <p class="text-gray-400 mt-3">Loading similar artists...</p>
 </div>
+
 
 {# --- Results Container (Initially Hidden) --- #}
 <div id="results-container" style="display: none;">

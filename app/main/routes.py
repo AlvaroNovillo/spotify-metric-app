@@ -1,9 +1,9 @@
-# --- START OF (REVISED) FILE app/main/routes.py ---
+# --- START OF (COMPLETE) FILE app/main/routes.py ---
 import time
 import traceback
+import math
 import pandas as pd
 import io
-import math
 from flask import (
     render_template, redirect, url_for, flash, request, current_app, session, Response
 )
@@ -22,10 +22,8 @@ from ..lastfm.scraper import (
     scrape_lastfm_tags
 )
 
-# (Keep index and search_artist routes - ensure search_artist clears both pool and tag cache)
 @main_bp.route('/')
 def index():
-    # ... (optional clearing logic) ...
     return redirect(url_for('main.search_artist'))
 
 @main_bp.route('/search', methods=['GET'])
@@ -46,7 +44,6 @@ def search_artist():
 
     if search_performed:
         print(f"Performing artist search for: '{query}'")
-        # Clear caches related to the *previous* artist when a *new* search starts
         last_searched = session.get('last_searched_artist', {})
         if last_searched.get('id'):
              last_id = last_searched['id']
@@ -58,7 +55,6 @@ def search_artist():
         session.pop('last_searched_artist', None)
 
         try:
-            # ... (Spotify search logic) ...
             results = sp.search(q=query, type='artist', limit=1)
             if results and results['artists']['items']:
                 artist_id_to_display = results['artists']['items'][0]['id']
@@ -68,7 +64,6 @@ def search_artist():
         except Exception as e:
             flash(f'Error during search: {e}', 'error'); traceback.print_exc()
     else:
-        # ... (Load last searched from session) ...
          last_artist = session.get('last_searched_artist')
          if last_artist and isinstance(last_artist, dict) and 'id' in last_artist:
             artist_id_to_display = last_artist['id']
@@ -78,7 +73,6 @@ def search_artist():
 
     if artist_id_to_display:
         try:
-            # ... (Fetch Spotify details, releases, tracks) ...
             print(f"Fetching Spotify details for artist: {artist_name_context} ({artist_id_to_display})")
             main_artist_details = sp.artist(artist_id_to_display)
             if main_artist_details:
@@ -93,7 +87,6 @@ def search_artist():
                 except Exception as e: print(f"Error fetching releases: {e}")
 
 
-                # ... (Fetch Last.fm Events) ...
                 try:
                     print(f"Fetching Last.fm events for: {artist_name_context}")
                     lastfm_events_result = scrape_lastfm_upcoming_events(artist_name_context)
@@ -101,8 +94,6 @@ def search_artist():
                     if lastfm_events_result is None: flash("Could not retrieve event data from Last.fm due to an error.", "warning")
                 except Exception as event_err: print(f"Error during Last.fm event scraping call: {event_err}"); flash("An unexpected error occurred while fetching event data.", "error"); lastfm_events = []
 
-
-                # Fetch Last.fm Tags
                 try:
                     print(f"Fetching Last.fm tags for: {artist_name_context}")
                     lastfm_tags_result = scrape_lastfm_tags(artist_name_context)
@@ -130,14 +121,12 @@ def search_artist():
                            lastfm_tags=lastfm_tags)
 
 
-# --- REVISED Similar Artists Route (Tag Fetching REMOVED) ---
 @main_bp.route('/similar-artists/<artist_id>', methods=['GET'])
 def similar_artists(artist_id):
     sp = get_spotify_client_credentials_client()
     if not sp: flash('Spotify API client could not be initialized.', 'error'); return redirect(url_for('main.search_artist'))
     if not artist_id: flash('No artist ID provided.', 'error'); return redirect(url_for('main.search_artist'))
 
-    # Get Filter & Pagination Parameters
     try:
         min_followers=request.args.get('min_followers', default=None, type=int)
         max_followers=request.args.get('max_followers', default=None, type=int)
@@ -155,11 +144,9 @@ def similar_artists(artist_id):
     source_artist_name = "Selected Artist"
     source_artist_genres = []
     session_pool_key = f"similar_artists_pool_{artist_id}"
-    # REMOVED: tags_cache_key = f"similar_artists_tags_cache_{artist_id}"
     combined_pool = []
 
     try:
-        # 1. Get Source Artist Details
         print(f"Fetching source artist details for ID: {artist_id}")
         source_artist = sp.artist(artist_id)
         if not source_artist: flash(f"Could not find source artist ID {artist_id}.", 'error'); return redirect(url_for('main.search_artist'))
@@ -167,14 +154,12 @@ def similar_artists(artist_id):
         source_artist_genres = source_artist.get('genres', [])
         print(f"Source artist: {source_artist_name}")
 
-        # 2. Check/Fetch Combined Artist Pool
         if session_pool_key in session:
             print(f"Found similar artists pool for '{source_artist_name}' in session cache.")
             combined_pool = session[session_pool_key]
             if not isinstance(combined_pool, list): combined_pool = []
         if not combined_pool:
             print(f"Similar artists pool for '{source_artist_name}' not cached. Fetching...")
-            # (Fetch/Scrape logic remains the same)
             print(" -> Executing Spotify genre search...")
             spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, source_artist_name, source_artist_genres)
             print(f" -> Found {len(spotify_genre_artists)} candidates via Spotify genres.")
@@ -195,18 +180,30 @@ def similar_artists(artist_id):
                  if artist and artist.get('id') and artist['id'] != artist_id: combined_artists_map[artist['id']] = artist
             combined_pool = list(combined_artists_map.values())
             print(f" -> Total unique similar artist pool size: {len(combined_pool)}")
-            # Store only the pool in Session
             try:
                 session[session_pool_key] = combined_pool
                 print(f" -> Stored pool in session cache.")
-                # REMOVED: session[tags_cache_key] = {}
             except Exception as cache_err: print(f" -> Warning: Failed to store pool: {cache_err}"); flash("Warning: Could not cache results.", "warning")
 
-        # 3. Apply Filters to the Pool
+        # --- MODIFICATION START: Aggregate and count genres from the entire pool ---
+        total_pool_size = len(combined_pool)
+        aggregated_genres = {}
+        if combined_pool:
+            for artist in combined_pool:
+                if artist and artist.get('genres'):
+                    for genre in artist['genres']:
+                        # Use a case-insensitive key for better grouping
+                        genre_key = genre.lower()
+                        aggregated_genres[genre_key] = aggregated_genres.get(genre_key, {'display_name': genre, 'count': 0})
+                        aggregated_genres[genre_key]['count'] += 1
+        
+        # Sort the genres by frequency (most common first)
+        sorted_genres = sorted(aggregated_genres.values(), key=lambda item: item['count'], reverse=True)
+        # --- MODIFICATION END ---
+
         filtered_artists = []
         if combined_pool:
             print(f"Applying filters LOCALLY to pool of {len(combined_pool)}...")
-            # ... (Filtering logic remains the same) ...
             for artist in combined_pool:
                 followers = artist.get('followers', {}).get('total'); popularity = artist.get('popularity')
                 if min_followers is not None and (followers is None or followers < min_followers): continue
@@ -215,26 +212,16 @@ def similar_artists(artist_id):
                 if max_popularity is not None and (popularity is None or popularity > max_popularity): continue
                 filtered_artists.append(artist)
             print(f"Filtered list size: {len(filtered_artists)}")
-        else:
-            print("Combined similar artist pool is empty.")
 
-        # 4. Sort Filtered List by Popularity
         if filtered_artists:
              filtered_artists.sort(key=lambda a: a.get('popularity', 0), reverse=True)
 
-        # 5. Paginate the Sorted, Filtered List
         total_artists = len(filtered_artists)
         total_pages = math.ceil(total_artists / per_page) if per_page > 0 else 1
         offset = (page - 1) * per_page
         artists_on_page = filtered_artists[offset : offset + per_page]
         print(f"Pagination: Page {page}/{total_pages}, showing {len(artists_on_page)}/{total_artists} artists.")
 
-        # ***** 6. REMOVED Tag Fetching Loop *****
-
-        # 7. Flash Messages (same as before)
-        # ...
-
-        # 8. Render Template (No longer needs to process 'lastfm_tags' per artist)
         return render_template('similar_artists.html',
                                artists=artists_on_page,
                                source_artist_name=source_artist_name,
@@ -245,23 +232,21 @@ def similar_artists(artist_id):
                                current_page=page,
                                total_pages=total_pages,
                                total_artists=total_artists,
-                               per_page=per_page)
+                               per_page=per_page,
+                               # --- MODIFICATION: Pass new variables to the template ---
+                               aggregated_genres=sorted_genres,
+                               total_pool_size=total_pool_size)
 
-    # Error Handling (Remove tag cache clearing)
     except spotipy.exceptions.SpotifyException as e:
         print(f"Spotify API error: {e}"); flash(f'Spotify error: {e.msg}', 'error')
-        source_name = source_artist.get('name', 'the artist') if source_artist else 'the artist'
         session.pop(session_pool_key, None)
-        # REMOVED: session.pop(tags_cache_key, None)
-        return render_template('similar_artists.html', artists=[], source_artist_name=source_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0)
+        return render_template('similar_artists.html', artists=[], source_artist_name=source_artist_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0, aggregated_genres=[], total_pool_size=0)
     except Exception as e:
         print(f"Unexpected error in route: {e}"); flash('Unexpected error.', 'error'); traceback.print_exc()
-        source_name = source_artist.get('name', 'the artist') if source_artist else 'the artist'
         session.pop(session_pool_key, None)
-        # REMOVED: session.pop(tags_cache_key, None)
-        return render_template('similar_artists.html', artists=[], source_artist_name=source_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0)
+        return render_template('similar_artists.html', artists=[], source_artist_name=source_artist_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0, aggregated_genres=[], total_pool_size=0)
 
-# --- NEW DOWNLOAD ROUTE ---
+
 @main_bp.route('/download-similar/<artist_id>')
 def download_similar_artists(artist_id):
     sp = get_spotify_client_credentials_client()
@@ -294,6 +279,8 @@ def download_similar_artists(artist_id):
         if not filtered_artists:
             return "No artists match the specified filters.", 404
 
+        df = pd.DataFrame(filtered_artists)
+
         column_mappers = {
             'name': lambda r: r.get('name', 'N/A'),
             'followers': lambda r: r.get('followers', {}).get('total'),
@@ -303,15 +290,10 @@ def download_similar_artists(artist_id):
             'image_url': lambda r: r['images'][0]['url'] if r.get('images') else None
         }
 
-        output_data = []
-        for artist in filtered_artists:
-            row = {}
-            for col in columns:
-                if col in column_mappers:
-                    row[col] = column_mappers[col](artist)
-            output_data.append(row)
-        
-        output_df = pd.DataFrame(output_data)
+        output_df = pd.DataFrame()
+        for col in columns:
+            if col in column_mappers:
+                output_df[col] = df.apply(column_mappers[col], axis=1)
 
         output = io.BytesIO()
         source_artist_name = sp.artist(artist_id).get('name', 'artist').replace(" ", "_")
@@ -337,4 +319,4 @@ def download_similar_artists(artist_id):
         traceback.print_exc()
         return "An unexpected error occurred while generating the file.", 500
 
-# --- END OF (CONFIRMED) FILE app/main/routes.py ---
+# --- END OF (COMPLETE) FILE app/main/routes.py ---
