@@ -6,3 +6,5 @@ requests>=2.25
 beautifulsoup4>=4.9
 google-generativeai>=0.4
 urllib3>=1.26.19 # Explicitly add for compatibility
+pandas>=2.0
+openpyxl>=3.0
