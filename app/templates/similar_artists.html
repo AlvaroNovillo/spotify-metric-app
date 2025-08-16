@@ -1,51 +1,47 @@
-{# --- START OF FILE app/templates/similar_artists.html --- #}
+{# --- START OF (FULLY REVISED) FILE app/templates/similar_artists.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}Artists Similar to {{ source_artist_name }}{% endblock %}
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-2 text-center">Artists Similar to {{ source_artist_name }}</h1>
+<p class="text-center text-gray-400 text-sm mb-6">(Combined from Spotify genres & Last.fm)</p>
 
-{# UPDATED description #}
-<p class="text-center text-gray-400 text-sm mb-1">(Combined results from Spotify genre matching and Last.fm scraping)</p>
-{% if search_genres %}
-     <p class="text-center text-gray-500 text-xs mb-6">Spotify searched genres: {{ search_genres | join(', ') }}</p>
-{% endif %}
-
-
-{# --- Filter Form (Applies to the combined list) --- #}
-<form method="GET" action="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
-    <h2 class="text-xl font-semibold mb-4 text-center text-gray-300">Filter Results</h2>
-    <p class="text-center text-xs text-gray-500 mb-4">(Filters based on Spotify data: Followers & Popularity)</p>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-        {# Followers Range #}
-        <div>
-            <label for="min_followers" class="block text-sm font-medium text-gray-400 mb-1">Min Followers</label>
-            <input type="number" name="min_followers" id="min_followers" min="0" step="1000" value="{{ request.args.get('min_followers', '') }}" placeholder="e.g., 10000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
+{# --- Filter & Download Section --- #}
+<div class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
+    <form method="GET" action="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" id="filter-form">
+        <h2 class="text-xl font-semibold mb-4 text-center text-gray-300">Filter Results</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+                <label for="min_followers" class="block text-sm font-medium text-gray-400 mb-1">Min Followers</label>
+                <input type="number" name="min_followers" id="min_followers" min="0" value="{{ request.args.get('min_followers', '') }}" placeholder="e.g., 10000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+            </div>
+            <div>
+                <label for="max_followers" class="block text-sm font-medium text-gray-400 mb-1">Max Followers</label>
+                <input type="number" name="max_followers" id="max_followers" min="0" value="{{ request.args.get('max_followers', '') }}" placeholder="e.g., 500000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+            </div>
+            <div>
+                <label for="min_popularity" class="block text-sm font-medium text-gray-400 mb-1">Min Popularity</label>
+                <input type="number" name="min_popularity" id="min_popularity" min="0" max="100" value="{{ request.args.get('min_popularity', '') }}" placeholder="e.g., 40" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+            </div>
+            <div>
+                <label for="max_popularity" class="block text-sm font-medium text-gray-400 mb-1">Max Popularity</label>
+                <input type="number" name="max_popularity" id="max_popularity" min="0" max="100" value="{{ request.args.get('max_popularity', '') }}" placeholder="e.g., 85" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+            </div>
         </div>
-        <div>
-            <label for="max_followers" class="block text-sm font-medium text-gray-400 mb-1">Max Followers</label>
-            <input type="number" name="max_followers" id="max_followers" min="0" step="1000" value="{{ request.args.get('max_followers', '') }}" placeholder="e.g., 500000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
+        <div class="mt-5 text-center flex justify-center items-center gap-4">
+            <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Apply Filters</button>
+            <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" class="text-sm text-gray-400 hover:text-gray-200">Clear Filters</a>
         </div>
-        {# Popularity Range #}
-        <div>
-            <label for="min_popularity" class="block text-sm font-medium text-gray-400 mb-1">Min Popularity (0-100)</label>
-            <input type="number" name="min_popularity" id="min_popularity" min="0" max="100" step="5" value="{{ request.args.get('min_popularity', '') }}" placeholder="e.g., 40" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
-        </div>
-        <div>
-            <label for="max_popularity" class="block text-sm font-medium text-gray-400 mb-1">Max Popularity (0-100)</label>
-            <input type="number" name="max_popularity" id="max_popularity" min="0" max="100" step="5" value="{{ request.args.get('max_popularity', '') }}" placeholder="e.g., 85" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
-        </div>
+    </form>
+    
+    {# --- NEW Download Button --- #}
+    <div class="text-center mt-6 border-t border-gray-700 pt-5">
+        <button id="show-download-modal-btn" type="button" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">
+            Download Filtered Results...
+        </button>
     </div>
-    {# Hidden input to reset page number when filters change #}
-    <input type="hidden" name="page" value="1">
-    <div class="mt-5 text-center">
-        <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-300">Apply Filters</button>
-        {# Clear filters link - only removes filter args, keeps page if present #}
-        <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=request.args.get('page', 1)) }}" class="ml-4 px-4 py-2 text-sm text-gray-400 hover:text-gray-200">Clear Filters</a>
-    </div>
-</form>
-
+</div>
 {# --- Loading Indicator --- #}
 <div id="loading-indicator" class="text-center py-10">
     <div class="loader inline-block border-4 border-gray-700 border-t-green-500 rounded-full w-12 h-12 animate-spin"></div>
@@ -178,18 +174,113 @@
         ← Back to {{ source_artist_name }}
     </a>
 </div>
+
+
+{# --- NEW: Download Options Modal (Initially Hidden) --- #}
+<div id="download-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-600">
+        <h3 class="text-xl font-bold mb-4 text-center">Download Options</h3>
+        <p class="text-sm text-gray-400 text-center mb-6">Select the data columns you want to include in your export file.</p>
+        
+        <form id="download-options-form">
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Artist Name</span>
+                </label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="followers" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Followers</span>
+                </label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="popularity" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Popularity</span>
+                </label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="genres" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Genres</span>
+                </label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="url" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Spotify URL</span>
+                </label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
+                    <input type="checkbox" name="columns" value="image_url" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
+                    <span class="ml-3 text-gray-200">Image URL</span>
+                </label>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-3">
+                <button id="cancel-download-btn" type="button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Cancel</button>
+                <button data-format="csv" class="download-btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Export as CSV</button>
+                <button data-format="xlsx" class="download-btn px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">Export as XLSX</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {# JavaScript for loading indicator #}
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- Existing loader logic ---
         const loader = document.getElementById('loading-indicator');
         const results = document.getElementById('results-container');
         if (loader) loader.style.display = 'none';
         if (results) results.style.display = 'block';
+
+        // --- NEW Download Modal Logic ---
+        const showModalBtn = document.getElementById('show-download-modal-btn');
+        const modal = document.getElementById('download-modal');
+        const cancelBtn = document.getElementById('cancel-download-btn');
+        const downloadButtons = document.querySelectorAll('.download-btn');
+
+        // Function to show the modal
+        if (showModalBtn) {
+            showModalBtn.addEventListener('click', () => {
+                if (modal) modal.classList.remove('hidden');
+            });
+        }
+
+        // Function to hide the modal
+        const hideModal = () => {
+            if (modal) modal.classList.add('hidden');
+        }
+        if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
+
+        // Function to handle the download click
+        downloadButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+
+                // 1. Get selected columns
+                const selectedColumns = Array.from(document.querySelectorAll('#download-options-form input[name="columns"]:checked'))
+                                             .map(cb => cb.value);
+                
+                if (selectedColumns.length === 0) {
+                    alert('Please select at least one column to export.');
+                    return;
+                }
+
+                // 2. Get current filter values from the main filter form
+                const filterForm = document.getElementById('filter-form');
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams(formData);
+
+                // 3. Add columns and format to the parameters
+                params.append('columns', selectedColumns.join(','));
+                params.append('format', event.target.dataset.format);
+                
+                // 4. Construct the download URL and initiate download
+                const downloadUrl = `{{ url_for('main.download_similar_artists', artist_id=source_artist_id) }}?${params.toString()}`;
+                window.location.href = downloadUrl;
+
+                // 5. Hide the modal
+                hideModal();
+            });
+        });
     });
 </script>
 {% endblock %}
-
-{# --- END OF FILE app/templates/similar_artists.html --- #}
+{# --- END OF (FULLY REVISED) FILE app/templates/similar_artists.html --- #}

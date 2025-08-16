@@ -1,9 +1,11 @@
 # --- START OF (REVISED) FILE app/main/routes.py ---
 import time
 import traceback
+import pandas as pd
+import io
 import math
 from flask import (
-    render_template, redirect, url_for, flash, request, current_app, session
+    render_template, redirect, url_for, flash, request, current_app, session, Response
 )
 import spotipy
 
@@ -259,5 +261,80 @@ def similar_artists(artist_id):
         # REMOVED: session.pop(tags_cache_key, None)
         return render_template('similar_artists.html', artists=[], source_artist_name=source_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0)
 
-# --- END OF (REVISED) FILE app/main/routes.py ---
-# --- END OF (REVISED) FILE app/main/routes.py ---
+# --- NEW DOWNLOAD ROUTE ---
+@main_bp.route('/download-similar/<artist_id>')
+def download_similar_artists(artist_id):
+    sp = get_spotify_client_credentials_client()
+    if not sp:
+        return "Spotify API client could not be initialized.", 500
+
+    session_pool_key = f"similar_artists_pool_{artist_id}"
+    combined_pool = session.get(session_pool_key)
+    if not combined_pool:
+        return "No similar artist data found in your session. Please perform a search first.", 404
+
+    try:
+        min_followers = request.args.get('min_followers', default=None, type=int)
+        max_followers = request.args.get('max_followers', default=None, type=int)
+        min_popularity = request.args.get('min_popularity', default=None, type=int)
+        max_popularity = request.args.get('max_popularity', default=None, type=int)
+        columns = request.args.get('columns', 'name,followers,popularity').split(',')
+        file_format = request.args.get('format', 'csv')
+
+        filtered_artists = []
+        for artist in combined_pool:
+            followers = artist.get('followers', {}).get('total')
+            popularity = artist.get('popularity')
+            if min_followers is not None and (followers is None or followers < min_followers): continue
+            if max_followers is not None and (followers is None or followers > max_followers): continue
+            if min_popularity is not None and (popularity is None or popularity < min_popularity): continue
+            if max_popularity is not None and (popularity is None or popularity > max_popularity): continue
+            filtered_artists.append(artist)
+
+        if not filtered_artists:
+            return "No artists match the specified filters.", 404
+
+        column_mappers = {
+            'name': lambda r: r.get('name', 'N/A'),
+            'followers': lambda r: r.get('followers', {}).get('total'),
+            'popularity': lambda r: r.get('popularity'),
+            'genres': lambda r: ', '.join(r.get('genres', [])),
+            'url': lambda r: r.get('external_urls', {}).get('spotify'),
+            'image_url': lambda r: r['images'][0]['url'] if r.get('images') else None
+        }
+
+        output_data = []
+        for artist in filtered_artists:
+            row = {}
+            for col in columns:
+                if col in column_mappers:
+                    row[col] = column_mappers[col](artist)
+            output_data.append(row)
+        
+        output_df = pd.DataFrame(output_data)
+
+        output = io.BytesIO()
+        source_artist_name = sp.artist(artist_id).get('name', 'artist').replace(" ", "_")
+        filename = f"similar_to_{source_artist_name}.{file_format}"
+
+        if file_format == 'xlsx':
+            output_df.to_excel(output, index=False, sheet_name='Similar Artists')
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        else:
+            output_df.to_csv(output, index=False, encoding='utf-8')
+            mimetype = 'text/csv'
+        
+        output.seek(0)
+
+        return Response(
+            output,
+            mimetype=mimetype,
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
+        )
+
+    except Exception as e:
+        print(f"Error during file download generation: {e}")
+        traceback.print_exc()
+        return "An unexpected error occurred while generating the file.", 500
+
+# --- END OF (CONFIRMED) FILE app/main/routes.py ---
