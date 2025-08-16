@@ -83,7 +83,7 @@ def search_artist():
                 session['last_searched_artist'] = {'id': main_artist_details['id'], 'name': main_artist_details['name']}
                 artist_name_context = main_artist_details['name']
                 market = 'US'
-                try: top_tracks_data = sp.artist_top_tracks(artist_id_to_display, country=market).get('tracks', [])
+                try: top_tracks_data = sp.artist_albums(artist_id_to_display, album_type='album,single', limit=20).get('items', []) #sp.artist_top_tracks(artist_id_to_display, country=market).get('tracks', [])
                 except Exception as e: print(f"Error fetching top tracks: {e}")
                 try:
                     simplified_releases = sp.artist_albums(artist_id_to_display, album_type='album,single', limit=20).get('items', [])

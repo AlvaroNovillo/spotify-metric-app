@@ -5,6 +5,9 @@ import json
 import traceback
 import smtplib
 from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
 from flask import (
     render_template, redirect, url_for, flash, request, Response,
     stream_with_context, jsonify, current_app
@@ -14,14 +17,61 @@ import random # Ensure random is imported for delays
 
 from . import playlists_bp
 from ..spotify.auth import get_spotify_client_credentials_client
-from ..spotify.data import fetch_similar_artists_by_genre
+from ..spotify.data import fetch_similar_artists_by_genre, fetch_release_details
 from ..spotify.utils import parse_follower_count
 from ..lastfm.scraper import scrape_lastfm_tags, scrape_lastfm_upcoming_events
 from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply
-from .email import generate_email_template_and_preview, format_error_message
+from .email import generate_email_template_and_preview, format_error_message, create_curator_outreach_html
 
 
-# ***** FIX: Add explicit endpoint name *****
+def fetch_all_artist_tracks(sp_client, artist_id):
+    """
+    Fetches ALL tracks for a given artist by paginating through their albums
+    and then fetching all tracks for each album.
+    """
+    if not sp_client or not artist_id:
+        return []
+
+    print(f"[FetchAllTracks] Starting process for artist ID: {artist_id}")
+    all_tracks = {} # Use a dict with track ID as key to avoid duplicates
+    albums = []
+    try:
+        # 1. Fetch all album IDs
+        print("[FetchAllTracks] Fetching all albums/singles...")
+        results = sp_client.artist_albums(artist_id, album_type='album,single', limit=50)
+        albums.extend(results['items'])
+        while results['next']:
+            results = sp_client.next(results)
+            albums.extend(results['items'])
+        print(f"[FetchAllTracks] Found {len(albums)} total albums/singles.")
+
+        # 2. Fetch full album details (which includes first page of tracks)
+        full_release_details = fetch_release_details(sp_client, albums)
+
+        # 3. Extract all tracks from the full release details
+        for release in full_release_details:
+            if release and release.get('tracks') and release['tracks'].get('items'):
+                for track in release['tracks']['items']:
+                    if track and track.get('id'):
+                        # Add album info to track for display
+                        track['album'] = {
+                            'name': release.get('name'),
+                            'images': release.get('images')
+                        }
+                        all_tracks[track['id']] = track
+
+        print(f"[FetchAllTracks] Found {len(all_tracks)} unique tracks for the artist.")
+        return list(all_tracks.values())
+
+    except spotipy.exceptions.SpotifyException as e:
+        print(f"Spotify API error in fetch_all_artist_tracks: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred in fetch_all_artist_tracks: {e}")
+        traceback.print_exc()
+
+    return list(all_tracks.values()) # Return what was found even if an error occurred
+
+
 @playlists_bp.route('/playlist-finder/<artist_id>', methods=['GET'], endpoint='show_playlist_finder')
 def playlist_finder(artist_id):
     sp = get_spotify_client_credentials_client()
@@ -32,8 +82,6 @@ def playlist_finder(artist_id):
         flash('No artist ID provided for playlist finding.', 'error')
         return redirect(url_for('main.search_artist'))
 
-    # (Rest of the playlist_finder function remains exactly the same as the previous step)
-    # ... try block to fetch artist details ...
     try:
         print(f"[PlaylistFinder] Fetching details for artist ID: {artist_id}")
         artist = sp.artist(artist_id)
@@ -50,22 +98,17 @@ def playlist_finder(artist_id):
         return redirect(url_for('main.search_artist'))
 
     selected_track_id = request.args.get('selected_track_id')
-    # REMOVED: song_description_from_req = request.args.get('song_description', '')
     user_keywords_raw = request.args.get('user_keywords', '')
     search_performed = bool(selected_track_id)
 
+    # Fetch ALL artist tracks for the selection list
+    all_artist_tracks = fetch_all_artist_tracks(sp, artist_id)
+
+
     def generate_response():
-        top_tracks = []
-        selected_track_name = None
-        market = 'US'
         lastfm_tags = []
 
         try:
-            print(f"[PlaylistFinder Stream] Fetching top tracks for {artist_name} ({artist_id})...")
-            top_tracks_result = sp.artist_top_tracks(artist_id, country=market)
-            top_tracks = top_tracks_result.get('tracks', []) if top_tracks_result else []
-            print(f"[PlaylistFinder Stream]   Found {len(top_tracks)} top tracks.")
-
             print(f"[PlaylistFinder Stream] Fetching Last.fm tags for {artist_name}...")
             tags_result = scrape_lastfm_tags(artist_name)
             lastfm_tags = tags_result if tags_result is not None else []
@@ -73,13 +116,13 @@ def playlist_finder(artist_id):
             else: print(f"[PlaylistFinder Stream]  -> Found {len(lastfm_tags)} Last.fm tags: {lastfm_tags[:10]}")
 
         except Exception as e:
-            print(f"[PlaylistFinder Stream] Error during initial data fetch (tracks/tags): {e}")
+            print(f"[PlaylistFinder Stream] Error during initial data fetch (tags): {e}")
             traceback.print_exc()
 
         yield render_template('playlist_finder_base.html',
                               artist_id=artist_id, artist_name=artist_name, artist_genres=artist_genres,
-                              lastfm_tags=lastfm_tags, top_tracks=top_tracks, selected_track_id=selected_track_id,
-                              user_keywords=user_keywords_raw, # song_description removed
+                              lastfm_tags=lastfm_tags, all_artist_tracks=all_artist_tracks, selected_track_id=selected_track_id,
+                              user_keywords=user_keywords_raw,
                               search_performed=search_performed, loading=search_performed, playlists=None, global_error=None)
 
         if not search_performed:
@@ -90,6 +133,7 @@ def playlist_finder(artist_id):
         try:
             print(f"[PlaylistFinder Stream] Search requested for track ID: {selected_track_id}")
             if not selected_track_id: raise ValueError("Selected track ID is missing.")
+            market = 'US'
             selected_track = sp.track(selected_track_id, market=market)
             if not selected_track: raise ValueError(f"Track ID '{selected_track_id}' not found.")
             selected_track_name = selected_track['name']; track_artist_name = selected_track['artists'][0]['name'] if selected_track['artists'] else artist_name
@@ -174,59 +218,165 @@ def generate_preview_email_route():
 def send_emails_route():
     # ... (No changes needed here from previous step) ...
     sp = get_spotify_client_credentials_client()
-    if not sp: return Response("event: error\ndata: Spotify client error\n\n", mimetype='text/event-stream', status=503)
-    if not current_app.config.get('GEMINI_API_KEY'): return Response("event: error\ndata: Gemini key missing\n\n", mimetype='text/event-stream', status=500)
-    sender_email = current_app.config.get("SENDER_EMAIL"); sender_password = current_app.config.get("SENDER_PASSWORD")
-    smtp_server_host = current_app.config.get("SMTP_SERVER"); smtp_port = current_app.config.get("SMTP_PORT")
-    if not all([sender_email, sender_password, smtp_server_host, smtp_port]): return Response("event: error\ndata: SMTP creds missing\n\n", mimetype='text/event-stream', status=500)
-    data = request.get_json();
-    if not data: return Response("event: error\ndata: Missing request data\n\n", mimetype='text/event-stream', status=400)
-    selected_track_id = data.get('track_id'); playlists_to_contact = data.get('playlists', []); edited_template_body = data.get('template_body')
-    if not selected_track_id or not playlists_to_contact or not isinstance(playlists_to_contact, list) or not edited_template_body: return Response("event: error\ndata: Missing required fields (track, playlists, template_body)\n\n", mimetype='text/event-stream', status=400)
-    if '{{curator_name}}' not in edited_template_body or '{{playlist_name}}' not in edited_template_body: return Response("event: error\ndata: Edited template seems to be missing required placeholders {{curator_name}} or {{playlist_name}}\n\n", mimetype='text/event-stream', status=400)
-    if not playlists_to_contact: return Response("event: status\ndata: No playlists provided\nevent: done\ndata: Finished.\n\n", mimetype='text/event-stream')
+    if not sp:
+        return Response("event: error\ndata: Spotify client error\n\n", mimetype='text/event-stream', status=503)
+
+    if not current_app.config.get('GEMINI_API_KEY'):
+        return Response("event: error\ndata: Gemini key missing\n\n", mimetype='text/event-stream', status=500)
+
+    sender_email = current_app.config.get("SENDER_EMAIL")
+    sender_password = current_app.config.get("SENDER_PASSWORD")
+    smtp_server_host = current_app.config.get("SMTP_SERVER")
+    smtp_port = current_app.config.get("SMTP_PORT")
+
+    if not all([sender_email, sender_password, smtp_server_host, smtp_port]):
+        return Response("event: error\ndata: SMTP creds missing\n\n", mimetype='text/event-stream', status=500)
+
+    data = request.get_json()
+    if not data:
+        return Response("event: error\ndata: Missing request data\n\n", mimetype='text/event-stream', status=400)
+
+    edited_subject = data.get('subject')
+    selected_track_id = data.get('track_id')
+    playlists_to_contact = data.get('playlists', [])
+    edited_template_body = data.get('template_body')
+    bcc_email = data.get('bcc_email', '').strip()
+
+    if not all([edited_subject, edited_template_body, selected_track_id, playlists_to_contact]):
+        return Response("event: error\ndata: Missing required fields (subject, template, track, playlists)\n\n", mimetype='text/event-stream', status=400)
+    if '{{curator_name}}' not in edited_template_body or '{{playlist_name}}' not in edited_template_body:
+        return Response("event: error\ndata: Edited template seems to be missing required placeholders {{curator_name}} or {{playlist_name}}\n\n", mimetype='text/event-stream', status=400)
+    if not playlists_to_contact:
+        return Response("event: status\ndata: No playlists provided\nevent: done\ndata: Finished.\n\n", mimetype='text/event-stream')
+
     def email_stream():
-        track = None; total_emails_to_send = len(playlists_to_contact); sent_count = 0; error_count = 0; start_time = time.time(); server = None
-        def yield_message(event, data): sanitized_data = str(data).replace('\n', ' ').replace('\r', ''); yield f"event: {event}\ndata: {sanitized_data}\n\n"
+        track = None
+        total_emails_to_send = len(playlists_to_contact)
+        sent_count = 0
+        error_count = 0
+        start_time = time.time()
+        server = None
+
+        def yield_message(event, data):
+            sanitized_data = str(data).replace('\n', ' ').replace('\r', '')
+            yield f"event: {event}\ndata: {sanitized_data}\n\n"
+
         try:
-            yield_message('status', 'Fetching track details...'); market = 'US'; track = sp.track(selected_track_id, market=market)
-            if not track: raise ValueError(f"Cannot fetch track details for ID: {selected_track_id}")
-            track_name = track.get('name', 'N/A'); track_artist_name = track['artists'][0]['name'] if track.get('artists') else "Unknown Artist"
+            yield_message('status', 'Fetching track details...')
+            market = 'US'
+            track = sp.track(selected_track_id, market=market)
+            if not track:
+                raise ValueError(f"Cannot fetch track details for ID: {selected_track_id}")
+            track_name = track.get('name', 'N/A')
+            track_artist_name = track['artists'][0]['name'] if track.get('artists') else "Unknown Artist"
             yield_message('status', f"Track '{track_name}' details fetched.")
+
             yield_message('status', f"Connecting to SMTP server {smtp_server_host}:{smtp_port}...")
             try:
-                if smtp_port == 465: server = smtplib.SMTP_SSL(smtp_server_host, smtp_port, timeout=30)
-                else: server = smtplib.SMTP(smtp_server_host, smtp_port, timeout=30); server.ehlo(); server.starttls(); server.ehlo()
-                yield_message('status', 'SMTP connection established. Logging in...'); server.login(sender_email, sender_password); yield_message('status', 'SMTP login successful. Starting email batch.')
-            except smtplib.SMTPAuthenticationError as auth_err: raise ConnectionError(f"SMTP Auth Error: {auth_err}. Check email/password/App Password.") from auth_err
-            except Exception as conn_err: raise ConnectionError(f"SMTP Connection Error: {conn_err}") from conn_err
+                if smtp_port == 465:
+                     server = smtplib.SMTP_SSL(smtp_server_host, smtp_port, timeout=30)
+                else:
+                     server = smtplib.SMTP(smtp_server_host, smtp_port, timeout=30)
+                     server.ehlo()
+                     server.starttls()
+                     server.ehlo()
+                yield_message('status', 'SMTP connection established. Logging in...')
+                server.login(sender_email, sender_password)
+                yield_message('status', 'SMTP login successful. Starting email batch.')
+            except smtplib.SMTPAuthenticationError as auth_err:
+                raise ConnectionError(f"SMTP Auth Error: {auth_err}. Check email/password/App Password.") from auth_err
+            except Exception as conn_err:
+                raise ConnectionError(f"SMTP Connection Error: {conn_err}") from conn_err
+
             for i, playlist in enumerate(playlists_to_contact):
-                if not isinstance(playlist, dict): yield_message('status', f"Skipping invalid entry {i+1}."); continue
-                playlist_name = playlist.get('name', 'N/A'); curator_email = playlist.get('email')
-                current_status = f"({i+1}/{total_emails_to_send}) Processing '{playlist_name}'"; yield_message('status', current_status)
-                if not curator_email or '@' not in curator_email: yield_message('status', f"-> Skipping (no valid email)."); continue
+                if not isinstance(playlist, dict):
+                    yield_message('status', f"Skipping invalid playlist entry {i+1}.")
+                    continue
+
+                playlist_name = playlist.get('name', 'N/A')
+                curator_email = playlist.get('email')
+                current_status = f"({i+1}/{total_emails_to_send}) Processing '{playlist_name}'"
+                yield_message('status', current_status)
+
+                if not curator_email or '@' not in curator_email:
+                    yield_message('status', f"-> Skipping (no valid email).")
+                    continue
+
                 try:
-                    yield_message('status', f"-> Preparing email for {curator_email}...")
-                    actual_curator_name = playlist.get('owner_name');
-                    if not actual_curator_name or actual_curator_name.lower() in ['n/a', 'spotify']: actual_curator_name = "Playlist Curator"
+                    actual_curator_name = playlist.get('owner_name') or "Playlist Curator"
+                    if actual_curator_name.lower() in ['n/a', 'spotify']: actual_curator_name = "Playlist Curator"
                     personalized_body = edited_template_body.replace("{{curator_name}}", actual_curator_name).replace("{{playlist_name}}", playlist_name)
-                    subject = f'Music Submission: "{track_name}" by {track_artist_name}'
+
+                    html_body = create_curator_outreach_html(track, personalized_body)
+                    subject = edited_subject
+
                     yield_message('status', f"-> Sending email to {curator_email}...")
-                    msg = EmailMessage(); msg['Subject'] = subject; msg['From'] = sender_email; msg['To'] = curator_email
-                    msg.set_content(personalized_body, subtype='plain', charset='utf-8'); server.send_message(msg)
-                    yield_message('success', f"-> Email sent to {curator_email}."); sent_count += 1
-                    sleep_duration = random.uniform(8, 15)
-                    if i < total_emails_to_send - 1: yield_message('status', f"-> Waiting {sleep_duration:.1f}s..."); time.sleep(sleep_duration)
-                except smtplib.SMTPException as send_err: error_count += 1; error_msg = format_error_message(send_err, f"SMTP send failed for {curator_email}"); print(f"Error sending email to {curator_email}: {send_err}"); yield_message('error', f"-> Error: {error_msg}"); time.sleep(5)
-                except Exception as e: error_count += 1; error_msg = format_error_message(e, f"Failed processing for {curator_email}"); print(f"Error processing email for {curator_email}: {e}"); yield_message('error', f"-> Error: {error_msg}"); time.sleep(2)
-        except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e: error_msg = format_error_message(e, "Email process setup failed"); print(f"Email process setup error: {e}"); yield_message('error', error_msg); yield_message('done', 'Aborted due to setup error.'); return
-        except Exception as e: error_msg = format_error_message(e, "Unexpected error during email process"); print(f"Unexpected email process error: {e}"); traceback.print_exc(); yield_message('error', error_msg); yield_message('done', 'Aborted due to unexpected error.'); return
+                    msg = EmailMessage()
+                    msg['Subject'] = subject
+                    msg['From'] =  f"Sebraca <{sender_email}>"
+                    msg['To'] = curator_email
+                    msg.set_content(personalized_body, subtype='plain')
+                    msg.add_alternative(html_body, subtype='html')
+
+                    recipients = [curator_email]
+                    if bcc_email and '@' in bcc_email:
+                        msg['Bcc'] = bcc_email
+                        recipients.append(bcc_email)
+                        yield_message('status', f"-> Also sending BCC to {bcc_email}")
+
+                    server.sendmail(sender_email, recipients, msg.as_string())
+
+                    yield_message('success', f"-> Email sent to {curator_email}.")
+                    sent_count += 1
+
+                    sleep_duration = random.uniform(25, 60)
+                    if i < total_emails_to_send - 1:
+                        yield_message('status', f"-> Waiting {sleep_duration:.1f}s...")
+                        time.sleep(sleep_duration)
+
+                except smtplib.SMTPException as send_err:
+                    error_count += 1
+                    error_msg = format_error_message(send_err, f"SMTP send failed for {curator_email}")
+                    print(f"Error sending email to {curator_email}: {send_err}")
+                    yield_message('error', f"-> Error: {error_msg}")
+                    time.sleep(5)
+                except Exception as e:
+                    error_count += 1
+                    error_msg = format_error_message(e, f"Failed processing for {curator_email}")
+                    print(f"Error processing email for {curator_email}: {e}")
+                    yield_message('error', f"-> Error: {error_msg}")
+                    time.sleep(2)
+
+        except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e:
+            error_msg = format_error_message(e, "Email process setup failed")
+            print(f"Email process setup error: {e}")
+            yield_message('error', error_msg)
+            yield_message('done', 'Aborted due to setup error.')
+            return
+
+        except Exception as e:
+            error_msg = format_error_message(e, "Unexpected error during email process")
+            print(f"Unexpected email process error: {e}")
+            traceback.print_exc()
+            yield_message('error', error_msg)
+            yield_message('done', 'Aborted due to unexpected error.')
+            return
+
         finally:
-            if server: yield_message('status', "Closing SMTP connection...");
-            try: server.quit(); yield_message('status', "SMTP connection closed.")
-            except smtplib.SMTPException as quit_err: print(f"Error quitting SMTP connection: {quit_err}"); yield_message('warning', "Error closing SMTP connection.")
-            end_time = time.time(); duration = round(end_time - start_time); final_message = f"Finished in {duration}s. Sent: {sent_count}, Errors: {error_count} / {total_emails_to_send} attempted."; yield_message('done', final_message)
+            if server:
+                yield_message('status', "Closing SMTP connection...")
+                try:
+                    server.quit()
+                    yield_message('status', "SMTP connection closed.")
+                except smtplib.SMTPException as quit_err:
+                    print(f"Error quitting SMTP connection: {quit_err}")
+                    yield_message('warning', "Error closing SMTP connection.")
+
+            end_time = time.time()
+            duration = round(end_time - start_time)
+            final_message = f"Finished in {duration}s. Sent: {sent_count}, Errors: {error_count} / {total_emails_to_send} attempted."
+            yield_message('done', final_message)
+
     return Response(email_stream(), mimetype='text/event-stream')
 
-
-# --- END OF (CORRECTED) FILE app/playlists/routes.py ---
+# --- END OF (REVISED) FILE app/playlists/routes.py ---

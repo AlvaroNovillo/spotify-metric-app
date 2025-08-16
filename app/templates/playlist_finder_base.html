@@ -1,11 +1,9 @@
-{# --- START OF FILE templates/playlist_finder_base.html --- #}
+{# --- START OF (CORRECTED) FILE templates/playlist_finder_base.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}
-    {% if selected_track_name %}
-        Playlist Results for {{ selected_track_name }} ({{ artist_name }})
-    {% elif loading %}
-        Searching Playlists for {{ artist_name }}...
+    {% if request.args.get('selected_track_id') %} {# Check if search was performed based on URL param #}
+        Playlist Results for {{ artist_name }}
     {% else %}
         Find Playlists for {{ artist_name }}
     {% endif %}
@@ -13,32 +11,36 @@
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-4 text-center">Find Playlists & Contact Curators for {{ artist_name }}</h1>
-{# Modified description slightly #}
 <p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, find relevant playlists, then generate & send outreach emails (experimental).</p>
 
-{# Disclaimer #}
-<div class="max-w-7xl mx-auto bg-yellow-900 border border-yellow-700 text-yellow-100 px-4 py-3 rounded relative mb-8" role="alert">
-  <strong class="font-bold">Warning:</strong>
-  <span class="block sm:inline"> Playlist finding uses an external, undocumented service (PlaylistSupply) via scraping. Email generation uses AI (Gemini). Both require stored credentials and are <strong class="underline">experimental and likely to break</strong> without notice. Use responsibly and ensure compliance with all terms of service.</span>
-</div>
+
 
 {# --- Main Content Area (Two Columns) --- #}
 <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
 
     {# --- Left Column (Wider): Form --- #}
     <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-        {# Form action points to the route with the specific artist ID #}
         <form method="GET" action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
             {# 1. Track Selection #}
-            <h2 class="text-xl font-semibold mb-5 text-center">1. Select Track by {{ artist_name }}</h2>
-            {% if top_tracks %}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {% for track in top_tracks %}
-                    <label class="flex items-center bg-gray-700 p-3 rounded-lg shadow hover:bg-gray-650 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500 has-[:checked]:bg-gray-700 group">
-                         {# Use request.args.get for checking the *current* request's selection #}
+            <h2 class="text-xl font-semibold mb-3 text-center">1. Select a Song by {{ artist_name }}</h2>
+
+            {# NEW: Song Search Bar #}
+            <div class="mb-4 relative">
+                <input type="search" id="song-search-input" placeholder="Search for a song..."
+                       class="w-full px-4 py-2 pl-10 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+
+            {% if all_artist_tracks %}
+                <div id="song-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                    {% for track in all_artist_tracks %}
+                    <label class="flex items-center bg-gray-700 p-3 rounded-lg shadow hover:bg-gray-650 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500 has-[:checked]:bg-gray-700 group"
+                           data-track-name="{{ track.name | lower }}" data-album-name="{{ track.album.name | lower if track.album else '' }}">
                          <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required
                                {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
-                         {# Album Cover/Info #}
                          {% if track.album and track.album.images %}
                             <img src="{{ track.album.images[-1].url }}" alt="{{ track.album.name }} Cover" class="w-12 h-12 rounded flex-shrink-0 object-cover mr-3 border border-gray-600">
                          {% else %}
@@ -46,42 +48,41 @@
                          {% endif %}
                          <div class="flex-grow overflow-hidden">
                              <span class="block text-sm font-medium text-gray-100 truncate group-hover:text-white" title="{{ track.name }}">{{ track.name }}</span>
-                             <span class="block text-xs text-gray-400 truncate" title="{{ track.artists | map(attribute='name') | join(', ') }}">{{ track.artists | map(attribute='name') | join(', ') }}</span>
+                             <span class="block text-xs text-gray-400 truncate" title="{{ track.artists | map(attribute='name') | join(', ') }}">
+                                 {{ track.artists | map(attribute='name') | join(', ') }}
+                                 {% if track.album %} • <span class="italic">{{ track.album.name }}</span>{% endif %}
+                             </span>
                          </div>
-                         {# Checkmark indication #}
                          <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 group-has-[:checked]:border-green-500 group-has-[:checked]:bg-green-500 flex items-center justify-center transition-colors duration-200">
                               <svg class="w-3 h-3 text-white opacity-0 group-has-[:checked]:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                          </div>
                     </label>
                     {% endfor %}
                 </div>
-            {% elif top_tracks is not none %}
-                 <p class="text-center text-gray-500 italic mb-4">No public top tracks found for {{ artist_name }} in the default market (US).</p>
+                <p id="no-song-results" class="text-center text-gray-500 italic mb-4 hidden">No songs match your search.</p>
+            {% elif all_artist_tracks is not none %}
+                 <p class="text-center text-gray-500 italic mb-4">No public tracks found for {{ artist_name }}.</p>
             {% else %}
-                 <p class="text-center text-red-400 italic mb-4">Could not load top tracks for {{ artist_name }}.</p>
+                 <p class="text-center text-red-400 italic mb-4">Could not load tracks for {{ artist_name }}.</p>
             {% endif %}
 
-             {# REMOVED Song Description from here #}
-
-            {# 2. Optional Keywords (was 3) #}
+            {# 2. Optional Keywords #}
             <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Add Optional Search Keywords</h2>
              <div class="mb-5">
                  <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
                  <input type="text" name="user_keywords" id="user_keywords"
-                        value="{{ user_keywords }}" {# Uses value passed from route #}
+                        value="{{ request.args.get('user_keywords', '') }}"
                         placeholder="e.g., chill vibes, workout, study"
                         class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
              </div>
 
              {# --- Buttons Container --- #}
              <div class="space-y-4 mt-6">
-                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg"
-                         {% if not top_tracks %}disabled title="Top tracks need to load first"{% endif %}>
+                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">
                     Find Playlists
                  </button>
-                 {# "Contact Curators" button triggers the overlay #}
-                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()" {# Changed name, points to new JS function #}
-                         class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden"> {# Renamed ID, still hidden initially #}
+                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()"
+                         class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
                      Generate & Send Emails...
                  </button>
@@ -93,31 +94,22 @@
     {# --- Right Column: Status & Results --- #}
     <div class="lg:col-span-5 bg-gray-850 p-6 rounded-lg shadow-inner border border-gray-700 flex flex-col">
         <h2 class="text-xl font-semibold mb-5 text-center text-gray-300">Search Status & Results</h2>
-
-        {# --- Progress Bar & Keywords --- #}
         <div id="progress-container" class="mb-4 p-4 bg-gray-700 rounded-lg shadow" style="display: none;">
             <div class="text-center text-sm font-medium text-gray-300 mb-2" id="progress-status">Initializing...</div>
             <div class="w-full bg-gray-600 rounded-full h-4 overflow-hidden">
                 <div id="progress-bar" class="bg-green-500 h-4 rounded-full transition-all duration-300 ease-linear" style="width: 0%"></div>
             </div>
-             {# Keywords Display Area #}
              <div id="keywords-display-area" class="mt-3 text-xs text-gray-400" style="display: none;">
                  <strong>Using keywords:</strong> <span id="keywords-list"></span>...
              </div>
-             {# End Keywords Display Area #}
         </div>
-
-        {# Results container #}
         <div id="playlist-results-container" class="flex-grow min-h-[200px]">
-            {% if not search_performed and not loading %}
+            {% if not request.args.get('selected_track_id') %}
                 <div class="flex items-center justify-center h-full">
-                     <p class="text-center text-gray-500 italic">Select a track by {{ artist_name }} and click "Find Playlists" to see results.</p>
+                     <p class="text-center text-gray-500 italic">Select a song and click "Find Playlists" to see results.</p>
                 </div>
             {% endif %}
-            {# Results loaded here via JS #}
         </div>
-
-        {# Email Status Container #}
          <div id="email-status-container" class="mt-6 hidden">
               <h3 class="text-lg font-semibold mb-3 text-center text-gray-300">Email Sending Progress</h3>
               <div class="bg-gray-700 p-4 rounded-lg shadow max-h-60 overflow-y-auto custom-scrollbar">
@@ -128,61 +120,62 @@
 
 </div>{# End Main Grid #}
 
-{# --- REVISED Email Preview & Generation Overlay --- #}
+{# --- REVISED Email Overlay --- #}
 <div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col"> {# Increased max-width #}
+    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
         <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Generate & Send Outreach Emails</h2>
 
-        {# Input Section #}
-        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                 <label for="song-description-editor" class="block text-gray-300 text-sm font-semibold mb-1">1. Song Description (for AI):</label>
-                 <textarea id="song-description-editor" rows="5"
-                           placeholder="e.g., A dreamy shoegaze track with ethereal vocals and layered guitars, perfect for late-night listening or introspective moments."
-                           class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
+        {# Top Section: Inputs & Generate Button #}
+        <div class="mb-4 border-b border-gray-700 pb-4 flex-shrink-0">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                     <label for="song-description-editor" class="block text-gray-300 text-sm font-semibold mb-1">1. Song Description (for AI):</label>
+                     <textarea id="song-description-editor" rows="5"
+                               placeholder="e.g., A dreamy shoegaze track with ethereal vocals..."
+                               class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
+                </div>
+                <div>
+                     <label for="language-selector" class="block text-gray-300 text-sm font-semibold mb-1">2. Email Language:</label>
+                     <select id="language-selector" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm h-[42px]">
+                         <option value="English" selected>English</option>
+                         <option value="Spanish">Spanish</option>
+                         <option value="French">French</option>
+                         <option value="German">German</option>
+                         <option value="Portuguese">Portuguese</option>
+                         <option value="Italian">Italian</option>
+                     </select>
+                     <div class="mt-2">
+                        <label for="bcc-email-input" class="block text-gray-300 text-sm font-semibold mb-1">3. Send a copy (BCC) to (optional):</label>
+                        <input type="email" id="bcc-email-input" placeholder="your.verification.email@example.com" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                     </div>
+                </div>
             </div>
-            <div>
-                 <label for="language-selector" class="block text-gray-300 text-sm font-semibold mb-1">2. Email Language:</label>
-                 <select id="language-selector" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
-                     <option value="English" selected>English</option>
-                     <option value="Spanish">Spanish</option>
-                     <option value="French">French</option>
-                     <option value="German">German</option>
-                     <option value="Portuguese">Portuguese</option>
-                     <option value="Italian">Italian</option>
-                     {# Add other languages as needed #}
-                 </select>
-            </div>
+            <button type="button" id="generate-email-button" onclick="generateEmailAction()" class="w-full md:w-1/2 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50 disabled:cursor-wait">
+                 <span class="button-text">Generate Template & Preview</span>
+                 <span class="button-loading animate-pulse hidden">Generating...</span>
+            </button>
         </div>
 
-         {# Generate Button #}
-         <button type="button" id="generate-email-button" onclick="generateEmailAction()" class="w-full md:w-1/2 mx-auto mb-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50 disabled:cursor-wait">
-             <span class="button-text">Generate Template & Preview</span>
-             <span class="button-loading animate-pulse hidden">Generating...</span>
-         </button>
-
-         {# Divider #}
-         <hr id="email-preview-divider" class="border-gray-600 my-4 hidden">
-
-        {# Preview & Edit Section (Initially Hidden) #}
-        <div id="email-preview-edit-section" class="hidden flex-grow min-h-0"> {# Ensure min-height is 0 to allow shrinking #}
-            <p class="text-sm text-gray-400 mb-4">3. Review & Edit the generated template below. Placeholders <code class="text-xs bg-gray-600 px-1 rounded">{{curator_name}}</code> and <code class="text-xs bg-gray-600 px-1 rounded">{{playlist_name}}</code> will be replaced for each email.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto flex-grow pr-2 custom-scrollbar"> {# Added flex-grow #}
-                {# Column 1: Editable Template #}
+        {# Bottom Section: Preview & Edit (Initially Hidden) #}
+        <div id="email-preview-edit-section" class="hidden flex-grow min-h-0 overflow-hidden flex flex-col">
+            <p class="text-sm text-gray-400 mb-1 flex-shrink-0">4. Review & Edit the generated template below.</p>
+            <p class="text-xs text-yellow-400 mb-4 text-center flex-shrink-0">
+                <strong class="font-semibold">Important:</strong> Personalize this template to improve deliverability! Emails will be sent slowly (25-60s delay) to respect rate limits.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                 <div class="flex flex-col">
                     <label for="template-body-editor" class="block text-gray-300 text-sm font-semibold mb-2">Editable Template Body:</label>
-                    <textarea id="template-body-editor" rows="15" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm font-mono resize-none"></textarea>
+                    <textarea id="template-body-editor" class="w-full h-full flex-grow p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm font-mono resize-none"></textarea>
                 </div>
-                {# Column 2: Subject & Rendered Preview #}
                 <div class="flex flex-col">
-                    <div class="mb-4">
-                        <strong class="block text-gray-300 text-sm font-semibold mb-1">Subject Line (Example):</strong>
-                        <p id="preview-subject" class="text-sm text-gray-100 p-2 bg-gray-700 rounded border border-gray-600 min-h-[38px]"></p> {# Added min-height #}
+                    <div class="mb-4 flex-shrink-0">
+                        <label for="preview-subject-editor" class="block text-gray-300 text-sm font-semibold mb-1">Editable Subject Line:</label>
+                        <input type="text" id="preview-subject-editor" class="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
                     </div>
-                    <div>
-                         <strong class="block text-gray-300 text-sm font-semibold mb-1">Preview (Using First Playlist):</strong>
-                         <div class="p-3 bg-gray-700 rounded border border-gray-600 max-h-[300px] overflow-y-auto custom-scrollbar">
-                             <pre id="preview-body" class="text-sm text-gray-100 whitespace-pre-wrap min-h-[100px]"></pre> {# Added min-height #}
+                    <div class="flex-grow min-h-0 flex flex-col">
+                         <strong class="block text-gray-300 text-sm font-semibold mb-1 flex-shrink-0">Preview (Using First Playlist):</strong>
+                         <div class="p-3 bg-gray-700 rounded border border-gray-600 flex-grow overflow-y-auto custom-scrollbar">
+                             <pre id="preview-body" class="text-sm text-gray-100 whitespace-pre-wrap min-h-[100px]"></pre>
                          </div>
                     </div>
                 </div>
@@ -192,14 +185,12 @@
         {# Footer Buttons #}
         <div class="mt-4 pt-4 border-t border-gray-600 flex justify-end space-x-4 flex-shrink-0">
             <button type="button" onclick="cancelEmailSend()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition duration-200">Cancel</button>
-            {# This button becomes active after generation #}
             <button type="button" id="confirm-send-button" onclick="confirmAndSendEmails()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition duration-200 hidden disabled:opacity-50">
                 Confirm & Send All
             </button>
         </div>
     </div>
 </div>
-
 
 {# Link back to general search page #}
 <div class="text-center mt-10">
@@ -285,59 +276,52 @@
         showEmailButton(); // Check if button should be shown after injecting data
     }
 
-    // --- REVISED Email Overlay & Generation Logic ---
-
-    // Store generated template globally within this script's scope
-    let currentGeneratedTemplate = '';
-    let currentSubjectLine = '';
+     // --- REVISED Email Overlay & Generation Logic ---
+     let exampleCuratorName = '';
+    let examplePlaylistName = '';
 
     function showEmailOverlay() {
         const overlay = document.getElementById('email-overlay');
         const descriptionEditor = document.getElementById('song-description-editor');
         const langSelector = document.getElementById('language-selector');
+        const bccInput = document.getElementById('bcc-email-input');
         const previewEditSection = document.getElementById('email-preview-edit-section');
-        const previewDivider = document.getElementById('email-preview-divider');
         const generateBtn = document.getElementById('generate-email-button');
         const sendBtn = document.getElementById('confirm-send-button');
         const templateEditor = document.getElementById('template-body-editor');
-        const previewSubject = document.getElementById('preview-subject');
+        const subjectEditor = document.getElementById('preview-subject-editor');
         const previewBody = document.getElementById('preview-body');
 
-        // Reset state on showing overlay
-        descriptionEditor.value = ''; // Clear previous description
-        langSelector.value = 'English'; // Reset language
-        templateEditor.value = ''; // Clear template editor
-        previewSubject.textContent = ''; // Clear subject
-        previewBody.textContent = ''; // Clear preview body
-        previewEditSection.classList.add('hidden'); // Hide preview area
-        previewDivider.classList.add('hidden'); // Hide divider
-        generateBtn.disabled = false; // Enable generate button
+        // Reset state
+        descriptionEditor.value = '';
+        langSelector.value = 'English';
+        bccInput.value = '';
+        templateEditor.value = '';
+        subjectEditor.value = '';
+        previewBody.textContent = '';
+        previewEditSection.classList.add('hidden');
+        generateBtn.disabled = false;
         generateBtn.querySelector('.button-text').classList.remove('hidden');
         generateBtn.querySelector('.button-loading').classList.add('hidden');
-        sendBtn.classList.add('hidden'); // Hide send button initially
-        sendBtn.disabled = true; // Ensure send button is disabled initially
+        sendBtn.classList.add('hidden');
+        sendBtn.disabled = true;
 
         if (overlay) {
             overlay.classList.remove('hidden');
-        } else {
-            console.error("Email overlay element not found");
         }
     }
 
     function generateEmailAction() {
-        // Triggered by the "Generate Template & Preview" button
-        const overlay = document.getElementById('email-overlay');
-        const subjectEl = document.getElementById('preview-subject');
-        const previewBodyEl = document.getElementById('preview-body'); // PREVIEW display
-        const templateEditorEl = document.getElementById('template-body-editor'); // EDITABLE textarea
+        const subjectEditorEl = document.getElementById('preview-subject-editor');
+        const previewBodyEl = document.getElementById('preview-body');
+        const templateEditorEl = document.getElementById('template-body-editor');
         const descriptionEditor = document.getElementById('song-description-editor');
         const langSelector = document.getElementById('language-selector');
         const generateBtn = document.getElementById('generate-email-button');
         const sendBtn = document.getElementById('confirm-send-button');
         const previewEditSection = document.getElementById('email-preview-edit-section');
-        const previewDivider = document.getElementById('email-preview-divider');
-        const loadingText = generateBtn ? generateBtn.querySelector('.button-loading') : null;
-        const buttonText = generateBtn ? generateBtn.querySelector('.button-text') : null;
+        const loadingText = generateBtn.querySelector('.button-loading');
+        const buttonText = generateBtn.querySelector('.button-text');
 
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
         const playlistsDataInput = document.getElementById('playlists-data-hidden');
@@ -348,37 +332,31 @@
         if (!songDescription) { alert('Please enter a song description.'); descriptionEditor.focus(); return; }
         const language = langSelector.value;
         if (!language) { alert('Please select an email language.'); langSelector.focus(); return; }
-
-        if (!playlistsDataInput || !playlistsDataInput.value) { alert('Playlist data not found. Run playlist search first.'); return; }
         let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { alert('Error reading playlist data.'); return; }
         const firstPlaylist = playlists.find(p => p && p.email && p.email.includes('@'));
         if (!firstPlaylist) { alert("No playlists with contactable emails found in results."); return; }
 
+        // Store example names for live preview
+        exampleCuratorName = firstPlaylist.owner_name || "Playlist Curator";
+        if (exampleCuratorName.toLowerCase() === 'n/a' || exampleCuratorName.toLowerCase() === 'spotify') {
+             exampleCuratorName = "Playlist Curator";
+        }
+        examplePlaylistName = firstPlaylist.name || "Your Playlist";
+
         const trackId = selectedTrackInput.value;
 
-        // --- Show loading state on Generate button ---
-        if (generateBtn) generateBtn.disabled = true;
-        if (loadingText) loadingText.classList.remove('hidden');
-        if (buttonText) buttonText.classList.add('hidden');
-        previewEditSection.classList.add('hidden'); // Hide preview section during generation
-        previewDivider.classList.add('hidden');
-        sendBtn.classList.add('hidden'); // Ensure send button is hidden
-        sendBtn.disabled = true;
-        subjectEl.textContent = 'Generating...';
+        // Show loading state
+        generateBtn.disabled = true; loadingText.classList.remove('hidden'); buttonText.classList.add('hidden');
+        previewEditSection.classList.add('hidden'); sendBtn.classList.add('hidden'); sendBtn.disabled = true;
+        subjectEditorEl.value = 'Generating...'; subjectEditorEl.disabled = true;
         previewBodyEl.textContent = 'Generating...';
-        templateEditorEl.value = 'Generating...';
-        templateEditorEl.disabled = true;
+        templateEditorEl.value = 'Generating...'; templateEditorEl.disabled = true;
 
         const previewUrl = "{{ url_for('playlists.generate_preview_email_route') }}";
         fetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({
-                track_id: trackId,
-                song_description: songDescription, // Send current description
-                language: language,               // Send selected language
-                playlist: firstPlaylist           // Send first playlist for preview context
-             })
+            body: JSON.stringify({ track_id: trackId, song_description: songDescription, language: language, playlist: firstPlaylist })
         })
         .then(response => {
             if (!response.ok) { return response.json().then(err => { throw new Error(err.error || `HTTP error ${response.status}`) }); }
@@ -386,63 +364,73 @@
         })
         .then(data => {
             if (data.error) { throw new Error(data.error); }
-            currentSubjectLine = data.subject || '[Subject Generation Failed]'; // Store subject
-            currentGeneratedTemplate = data.template_body || '[Template Generation Failed]'; // Store template
-
-            subjectEl.textContent = currentSubjectLine;
+            subjectEditorEl.value = data.subject || '[Subject Generation Failed]';
             previewBodyEl.textContent = data.preview_body || '[Preview Generation Failed]';
-            templateEditorEl.value = currentGeneratedTemplate;
-
-            // Show preview/edit section and enable editor/send button on success
+            templateEditorEl.value = data.template_body || '[Template Generation Failed]';
             previewEditSection.classList.remove('hidden');
-            previewDivider.classList.remove('hidden');
             if (data.template_body) {
                 templateEditorEl.disabled = false;
-                sendBtn.classList.remove('hidden'); // Show the send button
-                sendBtn.disabled = false;           // Enable the send button
+                subjectEditorEl.disabled = false;
+                sendBtn.classList.remove('hidden');
+                sendBtn.disabled = false;
+                 templateEditorEl.removeEventListener('input', updateLivePreview);
+                 templateEditorEl.addEventListener('input', updateLivePreview);
             } else {
                 templateEditorEl.disabled = true;
+                subjectEditorEl.disabled = true;
                 sendBtn.classList.add('hidden');
                 sendBtn.disabled = true;
             }
         })
         .catch(error => {
             console.error("Error fetching email preview/template:", error);
-            subjectEl.textContent = 'Error';
+            subjectEditorEl.value = 'Error';
             previewBodyEl.textContent = `Failed to generate: ${error.message}`;
             templateEditorEl.value = `Failed to generate template: ${error.message}`;
-            templateEditorEl.disabled = true;
-            sendBtn.classList.add('hidden');
-            sendBtn.disabled = true;
         })
         .finally(() => {
-            // Reset Generate button state
             if (generateBtn) generateBtn.disabled = false;
             if (loadingText) loadingText.classList.add('hidden');
             if (buttonText) buttonText.classList.remove('hidden');
         });
     }
 
+    function updateLivePreview() {
+        const templateEditorEl = document.getElementById('template-body-editor');
+        const previewBodyEl = document.getElementById('preview-body');
+        if (!templateEditorEl || !previewBodyEl) return;
+        const currentTemplateText = templateEditorEl.value;
+        const renderedPreview = currentTemplateText
+            .replace(/\{\{\s*curator_name\s*\}\}/g, exampleCuratorName)
+            .replace(/\{\{\s*playlist_name\s*\}\}/g, examplePlaylistName);
+        previewBodyEl.textContent = renderedPreview;
+    }
+
     function cancelEmailSend() {
          const overlay = document.getElementById('email-overlay');
          if (overlay) overlay.classList.add('hidden');
+         const templateEditorEl = document.getElementById('template-body-editor');
+         if (templateEditorEl) templateEditorEl.removeEventListener('input', updateLivePreview);
     }
 
     function confirmAndSendEmails() {
         const templateEditorEl = document.getElementById('template-body-editor');
+        const subjectEditorEl = document.getElementById('preview-subject-editor');
+        const bccEmailInput = document.getElementById('bcc-email-input');
         const editedTemplateBody = templateEditorEl ? templateEditorEl.value.trim() : null;
+        const editedSubject = subjectEditorEl ? subjectEditorEl.value.trim() : null;
+        const bccEmail = bccEmailInput ? bccEmailInput.value.trim() : '';
 
-        // Validate edited template
+        if (!editedSubject) { alert("Subject line cannot be empty."); subjectEditorEl.focus(); return; }
         if (!editedTemplateBody) { alert("Template body cannot be empty."); templateEditorEl.focus(); return; }
         if (editedTemplateBody.indexOf('{{curator_name}}') === -1 || editedTemplateBody.indexOf('{{playlist_name}}') === -1) {
-             if (!confirm("The template seems to be missing the required placeholders {{curator_name}} or {{playlist_name}}. Emails might not render correctly. Send anyway?")) {
-                 templateEditorEl.focus(); return;
-             }
+             if (!confirm("The template seems to be missing the required placeholders. Send anyway?")) { return; }
         }
+        if (bccEmail && !bccEmail.includes('@')) { alert("The BCC email address appears to be invalid."); bccEmailInput.focus(); return; }
 
-        cancelEmailSend(); // Hide overlay
+        cancelEmailSend();
 
-        const contactButton = document.getElementById('contact-curators-button'); // The button on the main page
+        const contactButton = document.getElementById('contact-curators-button');
         const emailStatusContainer = document.getElementById('email-status-container');
         const emailLog = document.getElementById('email-log');
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
@@ -454,24 +442,15 @@
         const playlistsToContact = playlists.filter(p => p && p.email && p.email.includes('@'));
         if (playlistsToContact.length === 0) { alert("No playlists with valid emails found in results to contact."); return; }
 
-
-        // Update UI on main page
         if (contactButton) { contactButton.disabled = true; contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>'; }
-        if (emailLog) emailLog.textContent = 'Initializing email process...\nUsing edited template.\n'; // Indicate template use
+        if (emailLog) emailLog.textContent = 'Initializing email process...\nUsing edited template.\n';
         if (emailStatusContainer) emailStatusContainer.style.display = 'block';
 
         const sendUrl = "{{ url_for('playlists.send_emails_route') }}";
-        console.log("Starting Fetch POST for email sending:", sendUrl);
-
-        // Send EDITED template body to backend
         fetch(sendUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-            body: JSON.stringify({
-                track_id: trackId,
-                playlists: playlistsToContact,
-                template_body: editedTemplateBody // Send the edited template
-             })
+            body: JSON.stringify({ track_id: trackId, playlists: playlistsToContact, subject: editedSubject, template_body: editedTemplateBody, bcc_email: bccEmail })
         })
         .then(response => { // Handle SSE stream
              if (!response.ok) { throw new Error(`Email sending failed: ${response.status} ${response.statusText}`); }
@@ -496,9 +475,8 @@
                           const dataLineInChunk = lines.slice(lines.indexOf(line) + 1).find(l => l.trim().startsWith('data:'));
                           if (dataLineInChunk) {
                               const eventData = dataLineInChunk.trim().substring(5).trim();
-                              console.log(`SSE Event: ${eventType}, Data: ${eventData}`);
                               if (emailLog) { let logPrefix = ''; if(eventType === 'success') logPrefix = '✅ '; else if(eventType === 'error') logPrefix = '❌ '; else if(eventType === 'status') logPrefix = '⏳ '; else if(eventType === 'done') logPrefix = '🏁 '; emailLog.textContent += logPrefix + eventData + '\n'; emailLog.scrollTop = emailLog.scrollHeight; }
-                          } else if (line === 'event: done') { console.log("SSE Event: done (no data line)"); if (emailLog) emailLog.textContent += '🏁 Finished.\n'; }
+                          } else if (line === 'event: done') { if (emailLog) emailLog.textContent += '🏁 Finished.\n'; }
                       }
                  });
                  reader.read().then(processStream);
@@ -538,18 +516,18 @@
 </script>
 {% endblock %}
 
-{# --- Extra CSS for scrollbar --- #}
 {% block extra_css %}
 <style>
-    /* Custom scrollbar styles */
+    /* Custom styles */
     .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #374151; /* gray-700 */ border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; /* gray-600 */ border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; /* gray-500 */ }
-    /* For Firefox */
-    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4b5563 #374151; /* thumb track */ }
-    /* Ensure mono font */
-    #template-body-editor { font-family: monospace; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #374151; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4b5563 #374151; }
+    #template-body-editor { font-family: monospace; min-height: 200px; }
+    #email-preview-edit-section .grid > div { display: flex; flex-direction: column; }
+    #email-preview-edit-section .grid > div > div:last-child { flex-grow: 1; display: flex; flex-direction: column; }
+    #email-preview-edit-section .grid > div > div:last-child > div { flex-grow: 1; }
 </style>
 {% endblock %}
 {# --- END OF FILE templates/show_playlist_finder_base.html --- #}
