@@ -1,19 +1,13 @@
-{# --- START OF (CORRECTED) FILE templates/playlist_finder_base.html --- #}
+{# --- START OF (FULLY REVISED) FILE templates/playlist_finder_base.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}
-    {% if request.args.get('selected_track_id') %} {# Check if search was performed based on URL param #}
-        Playlist Results for {{ artist_name }}
-    {% else %}
-        Find Playlists for {{ artist_name }}
-    {% endif %}
+    Find Playlists for {{ artist_name }}
 {% endblock %}
 
 {% block content %}
 <h1 class="text-3xl font-bold mb-4 text-center">Find Playlists & Contact Curators for {{ artist_name }}</h1>
-<p class="text-center text-gray-400 text-sm mb-6">Select a track by {{ artist_name }}, find relevant playlists, then generate & send outreach emails (experimental).</p>
-
-
+<p class="text-center text-gray-400 text-sm mb-6">Select a track, find relevant playlists, then generate & send outreach emails.</p>
 
 {# --- Main Content Area (Two Columns) --- #}
 <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -21,42 +15,52 @@
     {# --- Left Column (Wider): Form --- #}
     <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
         <form method="GET" action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
+            
             {# 1. Track Selection #}
             <h2 class="text-xl font-semibold mb-3 text-center">1. Select a Song by {{ artist_name }}</h2>
 
-            {# NEW: Song Search Bar #}
+            {# Song Search Bar - Now functional! #}
             <div class="mb-4 relative">
-                <input type="search" id="song-search-input" placeholder="Search for a song..."
+                <input type="search" id="song-search-input" placeholder="Search for a song by title or release..."
                        class="w-full px-4 py-2 pl-10 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
             </div>
 
-
+            {# --- NEW: Accordion-style Song List --- #}
             {% if all_artist_tracks %}
-                <div id="song-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {% for track in all_artist_tracks %}
-                    <label class="flex items-center bg-gray-700 p-3 rounded-lg shadow hover:bg-gray-650 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500 has-[:checked]:bg-gray-700 group"
-                           data-track-name="{{ track.name | lower }}" data-album-name="{{ track.album.name | lower if track.album else '' }}">
-                         <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required
-                               {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
-                         {% if track.album and track.album.images %}
-                            <img src="{{ track.album.images[-1].url }}" alt="{{ track.album.name }} Cover" class="w-12 h-12 rounded flex-shrink-0 object-cover mr-3 border border-gray-600">
-                         {% else %}
-                            <div class="w-12 h-12 rounded flex-shrink-0 bg-gray-600 flex items-center justify-center mr-3 text-gray-500 text-xl">?</div>
-                         {% endif %}
-                         <div class="flex-grow overflow-hidden">
-                             <span class="block text-sm font-medium text-gray-100 truncate group-hover:text-white" title="{{ track.name }}">{{ track.name }}</span>
-                             <span class="block text-xs text-gray-400 truncate" title="{{ track.artists | map(attribute='name') | join(', ') }}">
-                                 {{ track.artists | map(attribute='name') | join(', ') }}
-                                 {% if track.album %} • <span class="italic">{{ track.album.name }}</span>{% endif %}
-                             </span>
-                         </div>
-                         <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 group-has-[:checked]:border-green-500 group-has-[:checked]:bg-green-500 flex items-center justify-center transition-colors duration-200">
-                              <svg class="w-3 h-3 text-white opacity-0 group-has-[:checked]:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
-                         </div>
-                    </label>
+                <div id="song-list-container" class="space-y-2 mb-6 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
+                    {# `all_artist_tracks` is now a dictionary of releases #}
+                    {% for release_id, release in all_artist_tracks.items() %}
+                    <details class="release-accordion bg-gray-900 rounded group border border-gray-700 transition duration-300" data-release-name="{{ release.name | lower }}">
+                        {# Accordion Summary (The clickable part) #}
+                        <summary class="flex items-center p-2 cursor-pointer list-none group-hover:bg-gray-700">
+                            <img src="{{ release.images[-1].url if release.images else 'https://via.placeholder.com/40' }}" alt="{{ release.name }} Cover" class="w-10 h-10 rounded object-cover flex-shrink-0 mr-3">
+                            <div class="overflow-hidden">
+                                <span class="font-medium block truncate text-gray-200">{{ release.name }}</span>
+                                <span class="text-xs text-gray-400">{{ release.release_date.split('-')[0] if release.release_date }}</span>
+                            </div>
+                            <span class="text-xl text-gray-500 group-open:text-green-400 transform transition-transform duration-200 group-open:rotate-90 ml-auto flex-shrink-0">▶</span>
+                        </summary>
+                        
+                        {# Accordion Content (The tracks) #}
+                        <div class="p-2 border-t border-gray-700 space-y-2">
+                            {% for track in release.tracks %}
+                            <label class="song-item-label flex items-center bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500"
+                                   data-track-name="{{ track.name | lower }}">
+                                <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required
+                                       {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
+                                <div class="flex-grow overflow-hidden">
+                                    <span class="block text-sm font-medium text-gray-100 truncate" title="{{ track.name }}">{{ track.name }}</span>
+                                </div>
+                                <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 peer-checked:border-green-500 peer-checked:bg-green-500 flex items-center justify-center">
+                                    <svg class="w-3 h-3 text-white opacity-0 peer-checked:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </details>
                     {% endfor %}
                 </div>
                 <p id="no-song-results" class="text-center text-gray-500 italic mb-4 hidden">No songs match your search.</p>
@@ -66,31 +70,18 @@
                  <p class="text-center text-red-400 italic mb-4">Could not load tracks for {{ artist_name }}.</p>
             {% endif %}
 
-            {# 2. Optional Keywords #}
+            {# --- (The rest of the form: optional keywords and buttons are unchanged) --- #}
             <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Add Optional Search Keywords</h2>
-             <div class="mb-5">
+            <div class="mb-5">
                  <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
-                 <input type="text" name="user_keywords" id="user_keywords"
-                        value="{{ request.args.get('user_keywords', '') }}"
-                        placeholder="e.g., chill vibes, workout, study"
-                        class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
-             </div>
-
-             {# --- Buttons Container --- #}
+                 <input type="text" name="user_keywords" id="user_keywords" value="{{ request.args.get('user_keywords', '') }}" placeholder="e.g., chill vibes, workout, study" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
+            </div>
              <div class="space-y-4 mt-6">
-                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">
-                    Find Playlists
-                 </button>
-                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()"
-                         class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2 -mt-1" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
-                     Generate & Send Emails...
-                 </button>
-                 <input type="hidden" id="playlists-data-hidden" value="">
+                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Find Playlists</button>
+                 <button type="button" id="contact-curators-button" onclick="showEmailOverlay()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg hidden">Contact Curators...</button>
              </div>
         </form>
-    </div>{# End Left Column #}
-
+    </div>
     {# --- Right Column: Status & Results --- #}
     <div class="lg:col-span-5 bg-gray-850 p-6 rounded-lg shadow-inner border border-gray-700 flex flex-col">
         <h2 class="text-xl font-semibold mb-5 text-center text-gray-300">Search Status & Results</h2>
@@ -205,7 +196,7 @@
 <script>
     // Global variable to hold artist ID (can be useful)
     const currentArtistId = {{ artist_id | tojson }}; // Get artist_id from Flask context
-
+    let allFoundPlaylists = [];
     // --- Playlist Search Progress ---
     function updateProgress(percentage, statusText) {
         const progressBar = document.getElementById('progress-bar');
@@ -266,15 +257,135 @@
         }
     }
 
-    // --- Inject Results ---
-    function injectResultsAndData(resultsHtml, playlistData) {
+     // --- REVISED: Inject Results and Trigger Filter Setup ---
+     function injectResultsAndData(resultsHtml, playlistData, keywords) {
         const resultsContainer = document.getElementById('playlist-results-container');
         if (resultsContainer) resultsContainer.innerHTML = resultsHtml;
+
         const hiddenInput = document.getElementById('playlists-data-hidden');
-        // Ensure playlistData is stringified before setting value
-        if (hiddenInput) hiddenInput.value = JSON.stringify(playlistData || []);
-        showEmailButton(); // Check if button should be shown after injecting data
+        allFoundPlaylists = playlistData || []; // Store data globally
+        if (hiddenInput) hiddenInput.value = JSON.stringify(allFoundPlaylists);
+        
+        showEmailButton();
+
+        // Populate the multi-select filter UI
+        if (allFoundPlaylists.length > 0 && keywords && keywords.length > 0) {
+            setupMultiSelectFilter(keywords);
+        }
     }
+
+    // --- NEW: Function to create and manage the multi-select dropdown filter ---
+    function setupMultiSelectFilter(keywords) {
+        const container = document.getElementById('filter-dropdown-container');
+        const button = document.getElementById('filter-dropdown-button');
+        const buttonText = document.getElementById('filter-dropdown-text');
+        const optionsContainer = document.getElementById('filter-options-container');
+
+        if (!container || !button || !optionsContainer) return;
+
+        optionsContainer.innerHTML = ''; // Clear previous options
+
+        const lowercasedKeywords = keywords.map(k => k.toLowerCase());
+        const uniqueKeywords = [...new Set(lowercasedKeywords)].sort();
+
+        // Populate dropdown with checkboxes
+        uniqueKeywords.forEach(keyword => {
+            const optionLabel = document.createElement('label');
+            optionLabel.className = 'flex items-center px-4 py-2 text-sm text-gray-200 hover:bg-gray-600 cursor-pointer';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = keyword;
+            checkbox.className = 'h-4 w-4 rounded border-gray-500 bg-gray-800 text-green-500 focus:ring-green-500';
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = keyword;
+            textSpan.className = 'ml-3';
+
+            optionLabel.appendChild(checkbox);
+            optionLabel.appendChild(textSpan);
+            optionsContainer.appendChild(optionLabel);
+        });
+        
+        updatePlaylistCount(); // Initial count display
+
+        // --- Event Listeners ---
+
+        // Toggle dropdown visibility
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            optionsContainer.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!container.contains(event.target)) {
+                optionsContainer.classList.add('hidden');
+            }
+        });
+
+        // Handle checkbox changes to trigger filtering
+        optionsContainer.addEventListener('change', () => {
+            const selectedCheckboxes = optionsContainer.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedKeywords = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+            // Update button text
+            if (selectedKeywords.length === 0) {
+                buttonText.textContent = 'All Playlists';
+            } else if (selectedKeywords.length === 1) {
+                buttonText.textContent = selectedKeywords[0];
+            } else {
+                buttonText.textContent = `${selectedKeywords.length} keywords selected`;
+            }
+
+            filterPlaylists(selectedKeywords);
+        });
+    }
+
+    // --- REVISED: filterPlaylists now accepts an array of keywords ---
+    function filterPlaylists(selectedKeywords) {
+        const grid = document.getElementById('playlists-grid');
+        if (!grid) return;
+        
+        const playlistCards = grid.querySelectorAll('.playlist-card');
+        let visibleCount = 0;
+
+        playlistCards.forEach(card => {
+            // If no keywords are selected, show all playlists
+            if (selectedKeywords.length === 0) {
+                card.style.display = 'flex';
+                visibleCount++;
+                return; // continue to next card
+            }
+
+            const foundBy = card.dataset.foundBy.split(',');
+            // Show card if AT LEAST ONE of the selected keywords is in its `found_by` list
+            const isMatch = selectedKeywords.some(keyword => foundBy.includes(keyword));
+            
+            if (isMatch) {
+                card.style.display = 'flex';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        updatePlaylistCount(visibleCount);
+    }
+
+    // --- REVISED: updatePlaylistCount is now smarter ---
+    function updatePlaylistCount(visibleCount = null) {
+        const countDisplay = document.getElementById('playlist-count-display');
+        if (!countDisplay) return;
+
+        const totalCount = allFoundPlaylists.length;
+        if (visibleCount === null || visibleCount === totalCount) {
+             countDisplay.textContent = `Showing all ${totalCount} playlists.`;
+        } else {
+             countDisplay.textContent = `Showing ${visibleCount} of ${totalCount} playlists.`;
+        }
+    }
+
+
 
      // --- REVISED Email Overlay & Generation Logic ---
      let exampleCuratorName = '';
@@ -322,20 +433,40 @@
         const previewEditSection = document.getElementById('email-preview-edit-section');
         const loadingText = generateBtn.querySelector('.button-loading');
         const buttonText = generateBtn.querySelector('.button-text');
-
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
-        // Validation
+        // --- Basic validation for user inputs ---
         if (!selectedTrackInput) { alert('Please select a track first.'); return; }
         const songDescription = descriptionEditor.value.trim();
         if (!songDescription) { alert('Please enter a song description.'); descriptionEditor.focus(); return; }
         const language = langSelector.value;
         if (!language) { alert('Please select an email language.'); langSelector.focus(); return; }
-        let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { alert('Error reading playlist data.'); return; }
-        const firstPlaylist = playlists.find(p => p && p.email && p.email.includes('@'));
-        if (!firstPlaylist) { alert("No playlists with contactable emails found in results."); return; }
 
+        // --- MODIFICATION START: Filter playlists BEFORE selecting one for the preview ---
+        const optionsContainer = document.getElementById('filter-options-container');
+        const selectedCheckboxes = optionsContainer.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedKeywords = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        let visiblePlaylists = [];
+        if (selectedKeywords.length === 0) {
+            // If no filter is active, consider all playlists
+            visiblePlaylists = allFoundPlaylists;
+        } else {
+            // If a filter IS active, get only the playlists that match the filter
+            visiblePlaylists = allFoundPlaylists.filter(playlist => {
+                const foundBy = playlist.found_by || [];
+                return foundBy.some(keyword => selectedKeywords.includes(keyword));
+            });
+        }
+
+        // Now, find the first contactable playlist *within the visible/filtered list*
+        const firstPlaylist = visiblePlaylists.find(p => p && p.email && p.email.includes('@'));
+
+        // Handle the case where the filtered view has no contactable playlists
+        if (!firstPlaylist) {
+            alert("No contactable playlists are visible with the current filter selection. Please adjust your filter or clear it to generate a preview.");
+            return; // Stop the function
+        }
         // Store example names for live preview
         exampleCuratorName = firstPlaylist.owner_name || "Playlist Curator";
         if (exampleCuratorName.toLowerCase() === 'n/a' || exampleCuratorName.toLowerCase() === 'spotify') {
@@ -421,29 +552,70 @@
         const editedSubject = subjectEditorEl ? subjectEditorEl.value.trim() : null;
         const bccEmail = bccEmailInput ? bccEmailInput.value.trim() : '';
 
+        // --- Basic validation for the email content itself ---
         if (!editedSubject) { alert("Subject line cannot be empty."); subjectEditorEl.focus(); return; }
         if (!editedTemplateBody) { alert("Template body cannot be empty."); templateEditorEl.focus(); return; }
         if (editedTemplateBody.indexOf('{{curator_name}}') === -1 || editedTemplateBody.indexOf('{{playlist_name}}') === -1) {
-             if (!confirm("The template seems to be missing the required placeholders. Send anyway?")) { return; }
+             if (!confirm("Warning: The template seems to be missing the required placeholders {{curator_name}} or {{playlist_name}}. Send anyway?")) { return; }
         }
         if (bccEmail && !bccEmail.includes('@')) { alert("The BCC email address appears to be invalid."); bccEmailInput.focus(); return; }
 
-        cancelEmailSend();
+        // --- MODIFICATION: Filter the playlists before sending ---
+
+        // 1. Get the currently selected keywords from the filter dropdown
+        const optionsContainer = document.getElementById('filter-options-container');
+        const selectedCheckboxes = optionsContainer.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedKeywords = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        // 2. Build the list of playlists to contact based on the filter
+        let playlistsToContact = [];
+        if (selectedKeywords.length === 0) {
+            // If no filter is active, use the original behavior: send to all with emails
+            console.log("No filter active. Preparing to email all contactable playlists.");
+            playlistsToContact = allFoundPlaylists.filter(p => p && p.email && p.email.includes('@'));
+        } else {
+            // If a filter IS active, filter the master list by selected keywords
+            console.log(`Filter active. Filtering for keywords: ${selectedKeywords.join(', ')}`);
+            playlistsToContact = allFoundPlaylists.filter(playlist => {
+                // The playlist must have a valid email to be included
+                if (!playlist || !playlist.email || !playlist.email.includes('@')) {
+                    return false;
+                }
+                // The playlist's `found_by` array must contain at least one of the selected keywords
+                const foundBy = playlist.found_by || []; // `found_by` is an array of lowercase strings
+                return foundBy.some(keyword => selectedKeywords.includes(keyword));
+            });
+        }
+        
+        // Check if there are any playlists left to contact after filtering
+        if (playlistsToContact.length === 0) {
+            alert("No contactable playlists match the current filter selection.");
+            return;
+        }
+
+        // 3. Add a confirmation dialog that reflects the filtered count
+        const confirmationMessage = selectedKeywords.length > 0
+            ? `You have a filter active. This will attempt to send emails to the ${playlistsToContact.length} currently visible playlists. Continue?`
+            : `You are about to send emails to all ${playlistsToContact.length} contactable playlists found. Continue?`;
+
+        if (!confirm(confirmationMessage)) {
+            return; // User cancelled the process
+        }
+
+        // --- The rest of the function proceeds as before ---
+        
+        cancelEmailSend(); // Close the overlay
 
         const contactButton = document.getElementById('contact-curators-button');
         const emailStatusContainer = document.getElementById('email-status-container');
         const emailLog = document.getElementById('email-log');
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const playlistsDataInput = document.getElementById('playlists-data-hidden');
 
-        if (!selectedTrackInput || !playlistsDataInput) { console.error("Missing data for sending emails."); return; }
+        if (!selectedTrackInput) { console.error("Missing track data for sending emails."); return; }
         const trackId = selectedTrackInput.value;
-        let playlists = []; try { playlists = JSON.parse(playlistsDataInput.value); } catch (e) { console.error("Cannot parse playlist data for sending."); return; }
-        const playlistsToContact = playlists.filter(p => p && p.email && p.email.includes('@'));
-        if (playlistsToContact.length === 0) { alert("No playlists with valid emails found in results to contact."); return; }
-
+        
         if (contactButton) { contactButton.disabled = true; contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>'; }
-        if (emailLog) emailLog.textContent = 'Initializing email process...\nUsing edited template.\n';
+        if (emailLog) emailLog.textContent = `Initializing email process for ${playlistsToContact.length} playlists...\nUsing edited template.\n`;
         if (emailStatusContainer) emailStatusContainer.style.display = 'block';
 
         const sendUrl = "{{ url_for('playlists.send_emails_route') }}";
@@ -493,25 +665,80 @@
         });
     }
 
-     // --- Find Playlist Form Submit Listener ---
-     const findForm = document.getElementById('playlist-finder-form');
-     if(findForm) {
-         findForm.addEventListener('submit', function(event) {
-             const selectedRadio = findForm.querySelector('input[name="selected_track_id"]:checked');
-             // Removed description check from here
-             if (!selectedRadio) { alert("Please select a track."); event.preventDefault(); return; }
-             // if (!descriptionInput || !descriptionInput.value.trim()) { alert("Please enter a song description."); descriptionInput.focus(); event.preventDefault(); return; }
-             const findButton = findForm.querySelector('#find-playlists-button');
-             if(findButton) { findButton.disabled = true; findButton.innerHTML = '<span class="animate-pulse">Finding...</span>'; }
-             // Clear previous results/logs
-             const emailButton = document.getElementById('contact-curators-button'); if (emailButton) emailButton.classList.add('hidden');
-             const emailStatusContainer = document.getElementById('email-status-container'); if (emailStatusContainer) { emailStatusContainer.style.display = 'none'; emailStatusContainer.querySelector('#email-log').textContent = ''; }
-             const progressContainer = document.getElementById('progress-container'); if (progressContainer) progressContainer.style.display = 'block';
-             const resultsContainer = document.getElementById('playlist-results-container'); if (resultsContainer) { resultsContainer.innerHTML = ''; }
-             // Reset keywords display on new search
-             const keywordsDisplay = document.getElementById('keywords-display-area'); if (keywordsDisplay) keywordsDisplay.style.display = 'none';
-         });
-     }
+    // --- NEW: Function to handle the song search/filter ---
+    function setupSongSearch() {
+        const searchInput = document.getElementById('song-search-input');
+        const songListContainer = document.getElementById('song-list-container');
+        const noResultsMsg = document.getElementById('no-song-results');
+        
+        if (!searchInput || !songListContainer) return;
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase().trim();
+            const releaseAccordions = songListContainer.querySelectorAll('.release-accordion');
+            let totalMatches = 0;
+
+            releaseAccordions.forEach(accordion => {
+                const releaseName = accordion.dataset.releaseName || '';
+                const songItems = accordion.querySelectorAll('.song-item-label');
+                let matchesInRelease = 0;
+
+                songItems.forEach(song => {
+                    const trackName = song.dataset.trackName || '';
+                    
+                    // A match if query is in the track name OR the release name
+                    if (trackName.includes(query) || releaseName.includes(query)) {
+                        song.style.display = 'flex'; // Show the song
+                        matchesInRelease++;
+                    } else {
+                        song.style.display = 'none'; // Hide the song
+                    }
+                });
+
+                // Now, decide if the whole accordion should be visible
+                if (matchesInRelease > 0) {
+                    accordion.style.display = 'block'; // Show the release accordion
+                    // Optional: auto-open the accordion if a search is active to show results
+                    if (query) {
+                        accordion.open = true;
+                    }
+                    totalMatches++;
+                } else {
+                    accordion.style.display = 'none'; // Hide the whole release
+                }
+            });
+
+            // Show or hide the "No results" message
+            if (totalMatches === 0 && query) {
+                noResultsMsg.style.display = 'block';
+            } else {
+                noResultsMsg.style.display = 'none';
+            }
+        });
+    }
+
+    // --- Add a DOMContentLoaded listener to run our setup functions ---
+    document.addEventListener('DOMContentLoaded', () => {
+        setupSongSearch();
+        
+        // --- (Form submit listener remains the same) ---
+        const findForm = document.getElementById('playlist-finder-form');
+        if(findForm) {
+            findForm.addEventListener('submit', function(event) {
+                const selectedRadio = findForm.querySelector('input[name="selected_track_id"]:checked');
+                if (!selectedRadio) {
+                    alert("Please select a track before finding playlists.");
+                    event.preventDefault();
+                    return;
+                }
+                const findButton = findForm.querySelector('#find-playlists-button');
+                if(findButton) { findButton.disabled = true; findButton.innerHTML = '<span class="animate-pulse">Finding...</span>'; }
+                const emailButton = document.getElementById('contact-curators-button');
+                if (emailButton) emailButton.classList.add('hidden');
+            });
+        }
+    });
+     
 
 </script>
 {% endblock %}

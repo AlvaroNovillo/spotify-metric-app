@@ -24,44 +24,77 @@ from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply
 from .email import generate_email_template_and_preview, format_error_message, create_curator_outreach_html
 
 
+# --- REVISED FUNCTION: fetch_all_artist_tracks ---
 def fetch_all_artist_tracks(sp_client, artist_id):
     """
-    Fetches ALL tracks for a given artist by paginating through their albums
-    and then fetching all tracks for each album.
+    Fetches ALL tracks for a given artist's PRIMARY releases (albums/singles)
+    and groups them by release, sorted by release date.
     """
     if not sp_client or not artist_id:
-        return []
+        return {}
 
     print(f"[FetchAllTracks] Starting process for artist ID: {artist_id}")
-    all_tracks = {} # Use a dict with track ID as key to avoid duplicates
-    albums = []
+    releases_with_tracks = {}
+    all_fetched_releases = []
     try:
-        # 1. Fetch all album IDs
+        # 1. Fetch all potential album/single simplified objects
         print("[FetchAllTracks] Fetching all albums/singles...")
         results = sp_client.artist_albums(artist_id, album_type='album,single', limit=50)
-        albums.extend(results['items'])
+        all_fetched_releases.extend(results['items'])
         while results['next']:
             results = sp_client.next(results)
-            albums.extend(results['items'])
-        print(f"[FetchAllTracks] Found {len(albums)} total albums/singles.")
+            all_fetched_releases.extend(results['items'])
+        print(f"[FetchAllTracks] Found {len(all_fetched_releases)} total potential releases.")
 
-        # 2. Fetch full album details (which includes first page of tracks)
-        full_release_details = fetch_release_details(sp_client, albums)
+        # --- MODIFICATION START: Filter for primary releases only ---
+        # A release is considered "primary" if our artist is the first one credited.
+        primary_releases = []
+        for release in all_fetched_releases:
+            # Safety check: ensure the release has an 'artists' list and it's not empty
+            if release and release.get('artists') and len(release['artists']) > 0:
+                # Check if the ID of the first artist on the release matches our artist's ID
+                if release['artists'][0].get('id') == artist_id:
+                    primary_releases.append(release)
+        
+        print(f"[FetchAllTracks] Filtered down to {len(primary_releases)} primary releases (artist's own albums/singles).")
+        # --- MODIFICATION END ---
 
-        # 3. Extract all tracks from the full release details
+        # 2. Fetch full details for the FILTERED primary releases
+        # This is more efficient as it avoids fetching details for compilations we don't need.
+        if not primary_releases:
+            return {}
+            
+        full_release_details = fetch_release_details(sp_client, primary_releases)
+
+        # 3. Group all tracks by their release
         for release in full_release_details:
-            if release and release.get('tracks') and release['tracks'].get('items'):
+            if not release or not release.get('id'):
+                continue
+
+            releases_with_tracks[release['id']] = {
+                'id': release.get('id'),
+                'name': release.get('name'),
+                'images': release.get('images'),
+                'release_date': release.get('release_date'),
+                'tracks': []
+            }
+
+            if release.get('tracks') and release['tracks'].get('items'):
                 for track in release['tracks']['items']:
                     if track and track.get('id'):
-                        # Add album info to track for display
-                        track['album'] = {
-                            'name': release.get('name'),
-                            'images': release.get('images')
-                        }
-                        all_tracks[track['id']] = track
+                        releases_with_tracks[release['id']]['tracks'].append(track)
+        
+        # 4. Sort the final releases by date (newest first)
+        sorted_release_ids = sorted(
+            releases_with_tracks.keys(),
+            key=lambda r_id: releases_with_tracks[r_id].get('release_date', '0000'),
+            reverse=True
+        )
 
-        print(f"[FetchAllTracks] Found {len(all_tracks)} unique tracks for the artist.")
-        return list(all_tracks.values())
+        sorted_releases = {r_id: releases_with_tracks[r_id] for r_id in sorted_release_ids}
+
+        print(f"[FetchAllTracks] Found and grouped tracks for {len(sorted_releases)} unique primary releases.")
+        return sorted_releases
 
     except spotipy.exceptions.SpotifyException as e:
         print(f"Spotify API error in fetch_all_artist_tracks: {e}")
@@ -69,7 +102,7 @@ def fetch_all_artist_tracks(sp_client, artist_id):
         print(f"An unexpected error occurred in fetch_all_artist_tracks: {e}")
         traceback.print_exc()
 
-    return list(all_tracks.values()) # Return what was found even if an error occurred
+    return {}
 
 
 @playlists_bp.route('/playlist-finder/<artist_id>', methods=['GET'], endpoint='show_playlist_finder')

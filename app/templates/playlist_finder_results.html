@@ -1,6 +1,6 @@
-{# --- START OF FILE templates/playlist_finder_results.html --- #}
+{# --- START OF (REVISED) FILE templates/playlist_finder_results.html --- #}
 
-{# Only render results section if search was actually performed #}
+{# This template is a partial that gets injected into the main page. #}
 {% if search_performed %}
 
     {# --- Results Section Header --- #}
@@ -21,19 +21,37 @@
     {% elif not playlists %}
         <div class="text-center p-6 bg-gray-700 rounded-lg shadow">
             <h3 class="text-xl font-semibold mb-2">No Relevant Playlists Found</h3>
-            {% if has_scrape_error %}
-                 <p class="text-gray-400">No playlists found via PlaylistSupply. Some keyword searches may have failed.</p>
-            {% else %}
-                <p class="text-gray-400">No playlists found via PlaylistSupply for the keywords used.</p>
-            {% endif %}
-             <p class="text-sm text-gray-500 mt-2">(Try different keywords or check the external service.)</p>
+            <p class="text-gray-400">No playlists found via PlaylistSupply for the keywords used.</p>
         </div>
     {% else %}
-        {# --- Results Grid (Compacted) --- #}
-        <div class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2"> {# Max height and scroll #}
+        {# --- NEW: Multi-Select Dropdown Filter --- #}
+        <div class="mb-4 max-w-md mx-auto">
+            <label for="filter-dropdown-button" class="block text-sm font-semibold text-gray-300 mb-2 text-center">Filter by Keyword</label>
+            <div id="filter-dropdown-container" class="relative">
+                <!-- The button that shows the current selection and toggles the dropdown -->
+                <button id="filter-dropdown-button" type="button" class="w-full flex justify-between items-center px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:outline-none">
+                    <span id="filter-dropdown-text" class="text-gray-200">All Playlists</span>
+                    <svg class="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <!-- The dropdown panel with checkbox options -->
+                <div id="filter-options-container" class="hidden absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto custom-scrollbar">
+                    {# Options will be injected by JavaScript #}
+                </div>
+            </div>
+        </div>
+
+        {# --- Playlist Count Display --- #}
+        <p class="text-sm text-center text-gray-400 mb-4" id="playlist-count-display"></p>
+
+        {# --- Results Grid (Unchanged from previous step) --- #}
+        <div id="playlists-grid" class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
             {% for playlist in playlists %}
-            {# Playlist Card #}
-            <div class="bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600">
+            <div class="playlist-card bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600"
+                 data-found-by="{{ playlist.found_by | map('lower') | join(',') }}">
+                
+                {# The inner content of the card remains exactly the same #}
                 <div class="p-3 border-b border-gray-600">
                      <a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer" class="text-base font-semibold text-green-300 hover:text-green-200 hover:underline truncate block" title="{{ playlist.name }}">{{ playlist.name }}</a>
                      <p class="text-xs text-gray-400 mt-1">By: <span class="text-gray-200">{{ playlist.owner_name | default('N/A') }}</span>{% if playlist.owner_url %}<a href="{{ playlist.owner_url }}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1">↗</a>{% endif %}</p>
@@ -54,4 +72,4 @@
 
 {% endif %} {# End search_performed check #}
 
-{# --- END OF FILE templates/playlist_finder_results.html --- #}
+{# --- END OF (REVISED) FILE templates/playlist_finder_results.html --- #}
