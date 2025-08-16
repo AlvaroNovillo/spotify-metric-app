@@ -124,127 +124,87 @@ def search_artist():
 @main_bp.route('/similar-artists/<artist_id>', methods=['GET'])
 def similar_artists(artist_id):
     sp = get_spotify_client_credentials_client()
-    if not sp: flash('Spotify API client could not be initialized.', 'error'); return redirect(url_for('main.search_artist'))
-    if not artist_id: flash('No artist ID provided.', 'error'); return redirect(url_for('main.search_artist'))
+    if not sp:
+        flash('Spotify API client could not be initialized.', 'error')
+        return redirect(url_for('main.search_artist'))
 
+    # Parse filter and pagination arguments from the request URL
     try:
-        min_followers=request.args.get('min_followers', default=None, type=int)
-        max_followers=request.args.get('max_followers', default=None, type=int)
-        min_popularity=request.args.get('min_popularity', default=None, type=int)
-        max_popularity=request.args.get('max_popularity', default=None, type=int)
+        min_followers = request.args.get('min_followers', default=None, type=int)
+        max_followers = request.args.get('max_followers', default=None, type=int)
+        min_popularity = request.args.get('min_popularity', default=None, type=int)
+        max_popularity = request.args.get('max_popularity', default=None, type=int)
         page = request.args.get('page', default=1, type=int)
         if page < 1: page = 1
     except ValueError:
         flash("Invalid filter or page value.", "warning")
-        min_followers=max_followers=min_popularity=max_popularity=None
+        min_followers = max_followers = min_popularity = max_popularity = None
         page = 1
 
     per_page = 24
     source_artist = None
-    source_artist_name = "Selected Artist"
-    source_artist_genres = []
-    session_pool_key = f"similar_artists_pool_{artist_id}"
-    combined_pool = []
 
+    # --- MODIFICATION: Data is fetched fresh on every request to prevent session-related crashes ---
     try:
-        print(f"Fetching source artist details for ID: {artist_id}")
         source_artist = sp.artist(artist_id)
-        if not source_artist: flash(f"Could not find source artist ID {artist_id}.", 'error'); return redirect(url_for('main.search_artist'))
         source_artist_name = source_artist.get('name', 'Selected Artist')
         source_artist_genres = source_artist.get('genres', [])
-        print(f"Source artist: {source_artist_name}")
-
-        if session_pool_key in session:
-            print(f"Found similar artists pool for '{source_artist_name}' in session cache.")
-            combined_pool = session[session_pool_key]
-            if not isinstance(combined_pool, list): combined_pool = []
-        if not combined_pool:
-            print(f"Similar artists pool for '{source_artist_name}' not cached. Fetching...")
-            print(" -> Executing Spotify genre search...")
-            spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, source_artist_name, source_artist_genres)
-            print(f" -> Found {len(spotify_genre_artists)} candidates via Spotify genres.")
-            print(f" -> Executing Last.fm multi-page scrape for '{source_artist_name}'...")
-            lastfm_names = scrape_all_lastfm_similar_artists_names(source_artist_name, max_pages=5)
-            if lastfm_names is None: flash("Error connecting to Last.fm.", "warning"); lastfm_names = []
-            elif not lastfm_names: flash(f"No similar artists found on '{source_artist_name}' on Last.fm.", "info")
-            lastfm_spotify_artists = []
-            if lastfm_names:
-                print(f" -> Looking up Spotify details for {len(lastfm_names)} Last.fm names...")
-                lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names)
-                if not lastfm_spotify_artists and lastfm_names: flash("Could not find Spotify details for artists found on Last.fm.", "info")
-            print(" -> Merging and de-duplicating results...")
-            combined_artists_map = {}
-            for artist in spotify_genre_artists:
-                if artist and artist.get('id') and artist['id'] != artist_id: combined_artists_map[artist['id']] = artist
-            for artist in lastfm_spotify_artists:
-                 if artist and artist.get('id') and artist['id'] != artist_id: combined_artists_map[artist['id']] = artist
-            combined_pool = list(combined_artists_map.values())
-            print(f" -> Total unique similar artist pool size: {len(combined_pool)}")
-            try:
-                session[session_pool_key] = combined_pool
-                print(f" -> Stored pool in session cache.")
-            except Exception as cache_err: print(f" -> Warning: Failed to store pool: {cache_err}"); flash("Warning: Could not cache results.", "warning")
-
-        # --- MODIFICATION START: Aggregate and count genres from the entire pool ---
+        
+        print(f"Fetching similar artists pool for '{source_artist_name}'...")
+        spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, source_artist_name, source_artist_genres)
+        lastfm_names = scrape_all_lastfm_similar_artists_names(source_artist_name, max_pages=5)
+        lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names or [])
+        
+        combined_artists_map = {artist['id']: artist for artist in spotify_genre_artists if artist and artist.get('id') != artist_id}
+        for artist in lastfm_spotify_artists:
+            if artist and artist.get('id') != artist_id:
+                combined_artists_map[artist['id']] = artist
+        combined_pool = list(combined_artists_map.values())
+        print(f" -> Total unique similar artist pool size: {len(combined_pool)}")
+        
+        # Aggregate genres from the fresh pool
         total_pool_size = len(combined_pool)
         aggregated_genres = {}
-        if combined_pool:
-            for artist in combined_pool:
-                if artist and artist.get('genres'):
-                    for genre in artist['genres']:
-                        # Use a case-insensitive key for better grouping
-                        genre_key = genre.lower()
-                        aggregated_genres[genre_key] = aggregated_genres.get(genre_key, {'display_name': genre, 'count': 0})
-                        aggregated_genres[genre_key]['count'] += 1
-        
-        # Sort the genres by frequency (most common first)
+        for artist in combined_pool:
+            for genre in artist.get('genres', []):
+                genre_key = genre.lower()
+                aggregated_genres[genre_key] = aggregated_genres.get(genre_key, {'display_name': genre, 'count': 0})
+                aggregated_genres[genre_key]['count'] += 1
         sorted_genres = sorted(aggregated_genres.values(), key=lambda item: item['count'], reverse=True)
-        # --- MODIFICATION END ---
 
+        # Apply display filters to the fresh pool
         filtered_artists = []
-        if combined_pool:
-            print(f"Applying filters LOCALLY to pool of {len(combined_pool)}...")
-            for artist in combined_pool:
-                followers = artist.get('followers', {}).get('total'); popularity = artist.get('popularity')
-                if min_followers is not None and (followers is None or followers < min_followers): continue
-                if max_followers is not None and (followers is None or followers > max_followers): continue
-                if min_popularity is not None and (popularity is None or popularity < min_popularity): continue
-                if max_popularity is not None and (popularity is None or popularity > max_popularity): continue
-                filtered_artists.append(artist)
-            print(f"Filtered list size: {len(filtered_artists)}")
+        for artist in combined_pool:
+            followers = artist.get('followers', {}).get('total')
+            popularity = artist.get('popularity')
+            if min_followers is not None and (followers is None or followers < min_followers): continue
+            if max_followers is not None and (followers is None or followers > max_followers): continue
+            if min_popularity is not None and (popularity is None or popularity < min_popularity): continue
+            if max_popularity is not None and (popularity is None or popularity > max_popularity): continue
+            filtered_artists.append(artist)
 
-        if filtered_artists:
-             filtered_artists.sort(key=lambda a: a.get('popularity', 0), reverse=True)
-
+        # Sort and paginate the filtered results
+        filtered_artists.sort(key=lambda a: a.get('popularity', 0), reverse=True)
         total_artists = len(filtered_artists)
-        total_pages = math.ceil(total_artists / per_page) if per_page > 0 else 1
+        total_pages = math.ceil(total_artists / per_page)
         offset = (page - 1) * per_page
         artists_on_page = filtered_artists[offset : offset + per_page]
-        print(f"Pagination: Page {page}/{total_pages}, showing {len(artists_on_page)}/{total_artists} artists.")
 
         return render_template('similar_artists.html',
-                               artists=artists_on_page,
-                               source_artist_name=source_artist_name,
-                               source_artist_id=artist_id,
-                               search_genres=source_artist_genres[:3],
+                               artists=artists_on_page, source_artist_name=source_artist_name,
+                               source_artist_id=artist_id, search_genres=source_artist_genres[:3],
                                min_followers=min_followers, max_followers=max_followers,
                                min_popularity=min_popularity, max_popularity=max_popularity,
-                               current_page=page,
-                               total_pages=total_pages,
-                               total_artists=total_artists,
-                               per_page=per_page,
-                               # --- MODIFICATION: Pass new variables to the template ---
-                               aggregated_genres=sorted_genres,
-                               total_pool_size=total_pool_size)
+                               current_page=page, total_pages=total_pages,
+                               total_artists=total_artists, per_page=per_page,
+                               aggregated_genres=sorted_genres, total_pool_size=total_pool_size)
 
-    except spotipy.exceptions.SpotifyException as e:
-        print(f"Spotify API error: {e}"); flash(f'Spotify error: {e.msg}', 'error')
-        session.pop(session_pool_key, None)
-        return render_template('similar_artists.html', artists=[], source_artist_name=source_artist_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0, aggregated_genres=[], total_pool_size=0)
     except Exception as e:
-        print(f"Unexpected error in route: {e}"); flash('Unexpected error.', 'error'); traceback.print_exc()
-        session.pop(session_pool_key, None)
-        return render_template('similar_artists.html', artists=[], source_artist_name=source_artist_name, source_artist_id=artist_id, current_page=1, total_pages=0, total_artists=0, aggregated_genres=[], total_pool_size=0)
+        print(f"Unexpected error in similar_artists route: {e}")
+        traceback.print_exc()
+        flash('An unexpected error occurred while finding similar artists.', 'error')
+        source_name = source_artist.get('name', 'the artist') if source_artist else 'the artist'
+        return render_template('similar_artists.html', artists=[], source_artist_name=source_name, source_artist_id=artist_id, aggregated_genres=[], total_pool_size=0)
 
 
 @main_bp.route('/download-similar/<artist_id>')
@@ -253,12 +213,25 @@ def download_similar_artists(artist_id):
     if not sp:
         return "Spotify API client could not be initialized.", 500
 
-    session_pool_key = f"similar_artists_pool_{artist_id}"
-    combined_pool = session.get(session_pool_key)
-    if not combined_pool:
-        return "No similar artist data found in your session. Please perform a search first.", 404
-
     try:
+        # --- MODIFICATION: Fetch data directly instead of relying on session ---
+        source_artist = sp.artist(artist_id)
+        source_artist_name = source_artist.get('name', 'artist').replace(" ", "_")
+        source_artist_genres = source_artist.get('genres', [])
+
+        print(f"Fetching artist pool for download for '{source_artist_name}'...")
+        spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, source_artist_name, source_artist_genres)
+        lastfm_names = scrape_all_lastfm_similar_artists_names(source_artist_name, max_pages=5)
+        lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names or [])
+        
+        combined_artists_map = {artist['id']: artist for artist in spotify_genre_artists if artist and artist.get('id') != artist_id}
+        for artist in lastfm_spotify_artists:
+            if artist and artist.get('id') != artist_id:
+                combined_artists_map[artist['id']] = artist
+        combined_pool = list(combined_artists_map.values())
+        print(f" -> Found {len(combined_pool)} unique artists for the download pool.")
+        
+        # --- Filtering logic remains the same, but now operates on the fresh data ---
         min_followers = request.args.get('min_followers', default=None, type=int)
         max_followers = request.args.get('max_followers', default=None, type=int)
         min_popularity = request.args.get('min_popularity', default=None, type=int)
@@ -296,7 +269,6 @@ def download_similar_artists(artist_id):
                 output_df[col] = df.apply(column_mappers[col], axis=1)
 
         output = io.BytesIO()
-        source_artist_name = sp.artist(artist_id).get('name', 'artist').replace(" ", "_")
         filename = f"similar_to_{source_artist_name}.{file_format}"
 
         if file_format == 'xlsx':
