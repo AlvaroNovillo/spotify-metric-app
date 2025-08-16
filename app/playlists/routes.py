@@ -129,7 +129,11 @@ def playlist_finder(artist_id):
             print("[PlaylistFinder Stream] No track selected, stopping stream.")
             return
 
-        final_playlists = {}; keywords_list = []; ps_session = None; has_scrape_error = False; global_error_message = None
+        # --- MODIFICATION START ---
+        # final_playlists will now store both the playlist data and the keywords that found it.
+        final_playlists = {}
+        # --- MODIFICATION END ---
+        keywords_list = []; ps_session = None; has_scrape_error = False; global_error_message = None
         try:
             print(f"[PlaylistFinder Stream] Search requested for track ID: {selected_track_id}")
             if not selected_track_id: raise ValueError("Selected track ID is missing.")
@@ -171,21 +175,73 @@ def playlist_finder(artist_id):
                 elif isinstance(scrape_result, list):
                     count = 0
                     for pl in scrape_result:
-                        if isinstance(pl, dict) and pl.get('url') and 'open.spotify.com/playlist/' in pl['url'] and pl['url'] not in final_playlists: final_playlists[pl['url']] = pl; count += 1
+                        if isinstance(pl, dict) and pl.get('url') and 'open.spotify.com/playlist/' in pl['url']:
+                            playlist_url = pl['url']
+                            # --- MODIFICATION START ---
+                            if playlist_url not in final_playlists:
+                                # First time seeing this playlist, create a new entry
+                                final_playlists[playlist_url] = {
+                                    "playlist_data": pl,
+                                    "found_by": {keyword.lower()} # Use a set for unique keywords
+                                }
+                            else:
+                                # Already have this playlist, just add the new keyword
+                                final_playlists[playlist_url]["found_by"].add(keyword.lower())
+                            # --- MODIFICATION END ---
+                            count += 1
                 else: print(f"  -> Unexpected scrape result type for '{keyword}': {type(scrape_result)}"); has_scrape_error = True
             if global_error_message: raise ConnectionError(global_error_message)
 
             sorted_playlists = []
-            if final_playlists: yield f'<script>updateProgress(95, "Sorting results...");</script>\n'; sorted_playlists = sorted(list(final_playlists.values()), key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
+            if final_playlists:
+                yield f'<script>updateProgress(95, "Sorting results...");</script>\n'
+                # --- MODIFICATION START ---
+                # First, convert our dictionary into a list of playlist objects,
+                # attaching the 'found_by' keywords to each object.
+                playlists_with_keywords = []
+                for url, data in final_playlists.items():
+                    playlist_object = data['playlist_data']
+                    # Convert the set to a sorted list for JSON compatibility and consistent ordering
+                    playlist_object['found_by'] = sorted(list(data['found_by']))
+                    playlists_with_keywords.append(playlist_object)
+
+                # Now, sort the enhanced list by follower count
+                sorted_playlists = sorted(
+                    playlists_with_keywords,
+                    key=lambda p: parse_follower_count(p.get('followers')) or 0,
+                    reverse=True
+                )
+                # --- MODIFICATION END ---
             print(f"[PlaylistFinder Stream] Aggregated {len(final_playlists)} unique playlists. Sorted {len(sorted_playlists)}.")
 
             results_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=sorted_playlists, has_scrape_error=has_scrape_error, search_performed=True, global_error=None)
-            js_escaped_html = json.dumps(results_html); js_escaped_playlist_data = json.dumps(sorted_playlists); js_safe_final_title = json.dumps(f"Playlist Results for {selected_track_name}"); yield f'<script>injectResultsAndData({js_escaped_html}, {js_escaped_playlist_data}); document.title = {js_safe_final_title}; hideProgress();</script>\n'
+            js_escaped_html = json.dumps(results_html)
+            js_escaped_playlist_data = json.dumps(sorted_playlists)
+            
+            # --- MODIFICATION START ---
+            # Also pass the complete list of search keywords to the frontend for building filters
+            js_escaped_keywords = json.dumps(keywords_list)
+            js_safe_final_title = json.dumps(f"Playlist Results for {selected_track_name}")
+            # Update the JS call to include the keywords list as the third argument
+            yield f'<script>injectResultsAndData({js_escaped_html}, {js_escaped_playlist_data}, {js_escaped_keywords}); document.title = {js_safe_final_title}; hideProgress();</script>\n'
+            # --- MODIFICATION END ---
 
         except (ValueError, ConnectionError, spotipy.exceptions.SpotifyException) as e:
-            error_occurred = str(e); print(f"[PlaylistFinder Stream] Error: {error_occurred}"); js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Playlist Search Error: " + {js_safe_error});</script>\n'; error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred); js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
+            error_occurred = str(e); print(f"[PlaylistFinder Stream] Error: {error_occurred}"); js_safe_error = json.dumps(error_occurred)
+            error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred)
+            js_escaped_error_html = json.dumps(error_html)
+            # --- MODIFICATION START ---
+            # Pass empty keywords list `[]` on error
+            yield f'<script>injectResultsAndData({js_escaped_error_html}, [], []); hideProgress(); showSearchError("Playlist Search Error: " + {js_safe_error});</script>\n'
+            # --- MODIFICATION END ---
         except Exception as e:
-            error_occurred = f"Unexpected error: {str(e)}"; print(f"[PlaylistFinder Stream] Unexpected Error: {e}"); traceback.print_exc(); js_safe_error = json.dumps(error_occurred); yield f'<script>showSearchError("Unexpected Error: " + {js_safe_error});</script>\n'; error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred); js_escaped_error_html = json.dumps(error_html); yield f'<script>injectResultsAndData({js_escaped_error_html}, []); hideProgress();</script>\n'
+            error_occurred = f"Unexpected error: {str(e)}"; print(f"[PlaylistFinder Stream] Unexpected Error: {e}"); traceback.print_exc(); js_safe_error = json.dumps(error_occurred)
+            error_html = render_template('playlist_finder_results.html', selected_track_name=selected_track_name, playlists=None, search_performed=True, global_error=error_occurred)
+            js_escaped_error_html = json.dumps(error_html)
+            # --- MODIFICATION START ---
+            # Pass empty keywords list `[]` on error
+            yield f'<script>injectResultsAndData({js_escaped_error_html}, [], []); hideProgress(); showSearchError("Unexpected Error: " + {js_safe_error});</script>\n'
+            # --- MODIFICATION END ---
         finally:
             yield f'<script>hideProgress();</script>\n'
     return Response(stream_with_context(generate_response()), mimetype='text/html')
@@ -193,7 +249,7 @@ def playlist_finder(artist_id):
 
 @playlists_bp.route('/generate-preview-email', methods=['POST'])
 def generate_preview_email_route():
-    # ... (No changes needed here from previous step) ...
+    # This route has no changes from the original code
     sp = get_spotify_client_credentials_client()
     if not sp: return jsonify({"error": "Spotify API client failed to initialize."}), 503
     if not current_app.config.get('GEMINI_API_KEY'): return jsonify({"error": "AI API Key is not configured."}), 500
@@ -216,7 +272,7 @@ def generate_preview_email_route():
 
 @playlists_bp.route('/send-emails', methods=['POST'])
 def send_emails_route():
-    # ... (No changes needed here from previous step) ...
+    # This route has no changes from the original code
     sp = get_spotify_client_credentials_client()
     if not sp:
         return Response("event: error\ndata: Spotify client error\n\n", mimetype='text/event-stream', status=503)
