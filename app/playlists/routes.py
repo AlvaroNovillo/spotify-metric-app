@@ -1,9 +1,13 @@
 # --- START OF (REVISED) FILE app/playlists/routes.py ---
 import os
+import re
+import pandas as pd
+import io
 import time
 import json
 import traceback
 import smtplib
+import google.generativeai as genai
 from email.message import EmailMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -471,5 +475,94 @@ def send_emails_route():
     return Response(email_stream(), mimetype='text/event-stream')
 
 
+
+# --- NEW: AI-Powered Live Filtering Route ---
+@playlists_bp.route('/filter-playlists-ai', methods=['POST'])
+def filter_playlists_ai():
+    sp = get_spotify_client_credentials_client()
+    if not sp or not current_app.config.get('GEMINI_API_KEY'):
+        return jsonify({"error": "Server is not configured for AI filtering."}), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing request data."}), 400
+
+    user_query = data.get('query')
+    playlists = data.get('playlists', [])
+
+    if not user_query or not playlists:
+        return jsonify({"error": "Missing 'query' or 'playlists' in request."}), 400
+
+    print(f"[AI Filter] Received query: '{user_query}' for {len(playlists)} playlists.")
+
+    try:
+        # --- 1. Summarize Playlist Data for the AI Prompt ---
+        summarized_playlists = []
+        for pl in playlists:
+            found_by_str = ', '.join(pl.get('found_by', [])) if isinstance(pl.get('found_by'), list) else 'N/A'
+            
+            # --- MODIFICATION: Be explicit about the ID type ---
+            summary = (
+                f"Spotify_Playlist_ID: {pl.get('id', 'N/A')}\n"
+                f"Name: {pl.get('name', 'N/A')}\n"
+                f"Description: {pl.get('description', 'N/A')}\n"
+                f"Curator: {pl.get('owner_name', 'N/A')}\n"
+                f"Followers: {pl.get('followers', 'N/A')}\n"
+                f"Found By Keywords: {found_by_str}\n"
+            )
+            summarized_playlists.append(summary)
+        
+        playlists_context = "---\n".join(summarized_playlists)
+
+        # --- 2. Construct a More Explicit Gemini Prompt ---
+        model_name = current_app.config.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
+
+        # --- MODIFICATION: Update instructions to be very specific ---
+        prompt_parts = [
+            "You are an expert AI playlist filtering assistant.",
+            "Your task is to analyze a user's request and a list of playlists, each identified by a 'Spotify_Playlist_ID'.",
+            "You must return a JSON object containing a single key, 'playlist_ids', which is an array of the 'Spotify_Playlist_ID' values that best match the user's request, sorted from most to least relevant.",
+            "\n**Analysis Instructions:**",
+            "- Analyze the user's request for genres, moods, languages (e.g., 'español'), and themes.",
+            "- Use the 'Found By Keywords', 'Description', and 'Name' as primary signals for the playlist's content.",
+            "- Return only the playlists from the provided list.",
+            "\n---",
+            f"**User Request:** \"{user_query}\"",
+            "\n---",
+            "**Playlist Data:**",
+            playlists_context,
+            "\n---",
+            "**Your Response:**",
+            "Based on the request, provide the sorted list of matching 'Spotify_Playlist_ID' values in the specified JSON format.",
+            "CRITICAL: Your entire response must be ONLY the JSON object, with no other text, comments, or markdown formatting."
+        ]
+        prompt = "\n".join(prompt_parts)
+
+        # --- 3. Call the Gemini API ---
+        print("[AI Filter] Sending explicit request to Gemini...")
+        response = model.generate_content(prompt)
+        
+        # --- 4. Parse the Response and Return to Frontend ---
+        response_text = response.text.strip()
+        print(f"[AI Filter] Received response: {response_text}")
+        
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if not json_match:
+            raise ValueError("AI did not return a valid JSON object.")
+        
+        json_str = json_match.group(0)
+        result = json.loads(json_str)
+
+        if 'playlist_ids' not in result or not isinstance(result['playlist_ids'], list):
+            raise ValueError("AI response is missing the 'playlist_ids' array.")
+
+        print(f"[AI Filter] Successfully parsed {len(result['playlist_ids'])} Spotify IDs.")
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"[AI Filter] Error during AI filtering process: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"An unexpected error occurred during AI analysis: {e}"}), 500
 
 # --- END OF (REVISED) FILE app/playlists/routes.py ---
