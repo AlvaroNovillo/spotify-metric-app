@@ -1,4 +1,4 @@
-# --- START OF (COMPLETE) FILE app/main/routes.py ---
+# --- START OF (CORRECTED) FILE app/main/routes.py ---
 import time
 import traceback
 import math
@@ -79,8 +79,12 @@ def search_artist():
                 session['last_searched_artist'] = {'id': main_artist_details['id'], 'name': main_artist_details['name']}
                 artist_name_context = main_artist_details['name']
                 market = 'US'
-                try: top_tracks_data = sp.artist_albums(artist_id_to_display, album_type='album,single', limit=20).get('items', []) #sp.artist_top_tracks(artist_id_to_display, country=market).get('tracks', [])
-                except Exception as e: print(f"Error fetching top tracks: {e}")
+                try:
+                    # --- FIX START: Use the correct function to get top tracks with popularity ---
+                    top_tracks_data = sp.artist_top_tracks(artist_id_to_display, country=market).get('tracks', [])
+                    # --- FIX END ---
+                except Exception as e:
+                    print(f"Error fetching top tracks: {e}")
                 try:
                     simplified_releases = sp.artist_albums(artist_id_to_display, album_type='album,single', limit=20).get('items', [])
                     if simplified_releases: main_artist_releases_data = fetch_release_details(sp, simplified_releases); release_stats = calculate_release_stats(main_artist_releases_data)
@@ -291,4 +295,4 @@ def download_similar_artists(artist_id):
         traceback.print_exc()
         return "An unexpected error occurred while generating the file.", 500
 
-# --- END OF (COMPLETE) FILE app/main/routes.py ---
+# --- END OF (CORRECTED) FILE app/main/routes.py ---
