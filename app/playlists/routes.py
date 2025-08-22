@@ -475,93 +475,167 @@ def send_emails_route():
     return Response(email_stream(), mimetype='text/event-stream')
 
 
+def enrich_playlists_with_artist_data(sp_client, playlists_to_enrich, track_limit=50):
+    """
+    Fetches tracks and artists for a list of playlists to enrich them with genre data.
 
-# --- NEW: AI-Powered Live Filtering Route ---
+    Args:
+        sp_client: Authenticated Spotipy client.
+        playlists_to_enrich (list): A list of playlist objects to analyze.
+        track_limit (int): The number of tracks to fetch from each playlist.
+
+    Returns:
+        list: The same list of playlists, with an added 'artist_analysis' key.
+    """
+    if not playlists_to_enrich:
+        return []
+
+    print(f"[Enrichment] Starting deep artist analysis for {len(playlists_to_enrich)} playlists...")
+    playlist_ids = [p['id'] for p in playlists_to_enrich]
+    
+    # --- Step 1: Fetch tracks for all playlists ---
+    playlist_tracks = {}
+    for pl_id in playlist_ids:
+        try:
+            # Fetch first page of tracks for the playlist
+            results = sp_client.playlist_items(pl_id, limit=track_limit, fields='items(track(id, artists(id)))')
+            playlist_tracks[pl_id] = results['items']
+            time.sleep(0.1) # Small delay to respect rate limits
+        except Exception as e:
+            print(f"[Enrichment] Warning: Could not fetch tracks for playlist {pl_id}: {e}")
+            playlist_tracks[pl_id] = []
+
+    # --- Step 2: Aggregate all unique artist IDs ---
+    all_artist_ids = set()
+    for pl_id, items in playlist_tracks.items():
+        for item in items:
+            if item and item.get('track') and item['track'].get('artists'):
+                for artist in item['track']['artists']:
+                    if artist and artist.get('id'):
+                        all_artist_ids.add(artist.get('id'))
+    
+    # --- Step 3: Fetch genres for all unique artists in batches ---
+    artist_genres_map = {}
+    artist_id_list = list(all_artist_ids)
+    batch_size = 50 # Max artists per API call
+    for i in range(0, len(artist_id_list), batch_size):
+        batch_ids = artist_id_list[i:i + batch_size]
+        try:
+            artists_details = sp_client.artists(batch_ids)
+            for artist in artists_details['artists']:
+                if artist and artist.get('id'):
+                    artist_genres_map[artist['id']] = artist.get('genres', [])
+        except Exception as e:
+            print(f"[Enrichment] Warning: Could not fetch artist details batch: {e}")
+
+    # --- Step 4: Map the genre data back to each playlist ---
+    for playlist in playlists_to_enrich:
+        pl_id = playlist['id']
+        genre_counts = {}
+        items = playlist_tracks.get(pl_id, [])
+        for item in items:
+             if item and item.get('track') and item['track'].get('artists'):
+                for artist in item['track']['artists']:
+                    if artist and artist.get('id'):
+                        genres = artist_genres_map.get(artist['id'], [])
+                        for genre in genres:
+                            genre_counts[genre] = genre_counts.get(genre, 0) + 1
+        
+        # Sort genres by count and get top 10 for conciseness
+        sorted_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        playlist['artist_analysis'] = {
+            'top_artist_genres': dict(sorted_genres)
+        }
+
+    print("[Enrichment] Finished deep artist analysis.")
+    return playlists_to_enrich
+
+
 @playlists_bp.route('/filter-playlists-ai', methods=['POST'])
 def filter_playlists_ai():
+    # --- This function now uses a single-stage, AI-augmented keyword filter ---
+    
+    # Boilerplate setup
     sp = get_spotify_client_credentials_client()
     if not sp or not current_app.config.get('GEMINI_API_KEY'):
         return jsonify({"error": "Server is not configured for AI filtering."}), 500
 
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "Missing request data."}), 400
+    if not data: return jsonify({"error": "Missing request data."}), 400
 
     user_query = data.get('query')
     playlists = data.get('playlists', [])
+    if not user_query or not playlists: return jsonify({"error": "Missing 'query' or 'playlists' in request."}), 400
 
-    if not user_query or not playlists:
-        return jsonify({"error": "Missing 'query' or 'playlists' in request."}), 400
-
-    print(f"[AI Filter] Received query: '{user_query}' for {len(playlists)} playlists.")
+    print(f"[AI Filter V4] Received query: '{user_query}' for {len(playlists)} playlists.")
+    model_name = current_app.config.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+    model = genai.GenerativeModel(model_name)
 
     try:
-        # --- 1. Summarize Playlist Data for the AI Prompt ---
-        summarized_playlists = []
+        # --- STAGE 1: AI Query Expansion ---
+        print("[AI Filter V4] Step 1: Expanding query with representative artists...")
+        
+        artist_expansion_prompt = f"""
+        You are a music expert. A user wants to find playlists based on a query.
+        List up to 30 representative and well-known artists for the following query.
+        Focus on artists that would likely be found in playlists matching the user's intent.
+        Return ONLY a JSON object with a key 'artists' which is an array of strings. Do not include any other text.
+
+        USER QUERY: "{user_query}"
+
+        EXAMPLE RESPONSE:
+        {{"artists": ["Artist One", "Artist Two", "Artist Three"]}}
+
+        YOUR JSON RESPONSE:
+        """
+        
+        representative_artists = []
+        try:
+            artist_response = model.generate_content(artist_expansion_prompt)
+            json_str = re.search(r'\{.*\}', artist_response.text, re.DOTALL).group(0)
+            representative_artists = json.loads(json_str).get('artists', [])
+            print(f"[AI Filter V4] AI suggested artists: {representative_artists}")
+        except Exception as e:
+            print(f"[AI Filter V4] Warning: Could not parse representative artists. Using query only. Error: {e}")
+
+        # --- STAGE 2: Augmented Keyword Filtering & Sorting ---
+        print("[AI Filter V4] Step 2: Filtering playlists with augmented keywords...")
+        
+        # Create a combined set of keywords for the search (user's query + AI artists)
+        query_words = set(re.findall(r'\b\w+\b', user_query.lower()))
+        artist_names_lower = set(artist.lower() for artist in representative_artists)
+        augmented_keywords = query_words.union(artist_names_lower)
+        
+        matching_playlists = []
         for pl in playlists:
-            found_by_str = ', '.join(pl.get('found_by', [])) if isinstance(pl.get('found_by'), list) else 'N/A'
+            # Combine all text fields from the playlist for a comprehensive search
+            searchable_text = ' '.join([
+                pl.get('name', '').lower(),
+                pl.get('description', '').lower(),
+                ' '.join(pl.get('found_by', [])).lower()
+            ])
             
-            # --- MODIFICATION: Be explicit about the ID type ---
-            summary = (
-                f"Spotify_Playlist_ID: {pl.get('id', 'N/A')}\n"
-                f"Name: {pl.get('name', 'N/A')}\n"
-                f"Description: {pl.get('description', 'N/A')}\n"
-                f"Curator: {pl.get('owner_name', 'N/A')}\n"
-                f"Followers: {pl.get('followers', 'N/A')}\n"
-                f"Found By Keywords: {found_by_str}\n"
-            )
-            summarized_playlists.append(summary)
+            # If any augmented keyword is found in the playlist's text, it's a match.
+            if any(keyword in searchable_text for keyword in augmented_keywords):
+                matching_playlists.append(pl)
         
-        playlists_context = "---\n".join(summarized_playlists)
+        print(f"[AI Filter V4] Found {len(matching_playlists)} potential matches.")
 
-        # --- 2. Construct a More Explicit Gemini Prompt ---
-        model_name = current_app.config.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
-
-        # --- MODIFICATION: Update instructions to be very specific ---
-        prompt_parts = [
-            "You are an expert AI playlist filtering assistant.",
-            "Your task is to analyze a user's request and a list of playlists, each identified by a 'Spotify_Playlist_ID'.",
-            "You must return a JSON object containing a single key, 'playlist_ids', which is an array of the 'Spotify_Playlist_ID' values that best match the user's request, sorted from most to least relevant.",
-            "\n**Analysis Instructions:**",
-            "- Analyze the user's request for genres, moods, languages (e.g., 'español'), and themes.",
-            "- Use the 'Found By Keywords', 'Description', and 'Name' as primary signals for the playlist's content.",
-            "- Return only the playlists from the provided list.",
-            "\n---",
-            f"**User Request:** \"{user_query}\"",
-            "\n---",
-            "**Playlist Data:**",
-            playlists_context,
-            "\n---",
-            "**Your Response:**",
-            "Based on the request, provide the sorted list of matching 'Spotify_Playlist_ID' values in the specified JSON format.",
-            "CRITICAL: Your entire response must be ONLY the JSON object, with no other text, comments, or markdown formatting."
-        ]
-        prompt = "\n".join(prompt_parts)
-
-        # --- 3. Call the Gemini API ---
-        print("[AI Filter] Sending explicit request to Gemini...")
-        response = model.generate_content(prompt)
+        # Sort the matching playlists by follower count (descending) as a proxy for importance
+        sorted_playlists = sorted(
+            matching_playlists,
+            key=lambda p: parse_follower_count(p.get('followers', '0')) or 0,
+            reverse=True
+        )
         
-        # --- 4. Parse the Response and Return to Frontend ---
-        response_text = response.text.strip()
-        print(f"[AI Filter] Received response: {response_text}")
-        
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if not json_match:
-            raise ValueError("AI did not return a valid JSON object.")
-        
-        json_str = json_match.group(0)
-        result = json.loads(json_str)
+        # Extract the IDs to return to the frontend
+        final_playlist_ids = [p['id'] for p in sorted_playlists]
 
-        if 'playlist_ids' not in result or not isinstance(result['playlist_ids'], list):
-            raise ValueError("AI response is missing the 'playlist_ids' array.")
-
-        print(f"[AI Filter] Successfully parsed {len(result['playlist_ids'])} Spotify IDs.")
-        return jsonify(result)
+        print(f"[AI Filter V4] Returning {len(final_playlist_ids)} sorted playlist IDs.")
+        return jsonify({"playlist_ids": final_playlist_ids})
 
     except Exception as e:
-        print(f"[AI Filter] Error during AI filtering process: {e}")
+        print(f"[AI Filter V4] Error during AI-augmented filtering process: {e}")
         traceback.print_exc()
         return jsonify({"error": f"An unexpected error occurred during AI analysis: {e}"}), 500
 
