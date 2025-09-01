@@ -200,7 +200,7 @@ def create_curator_outreach_html(track_details, personalized_body):
                             <a href="{track_url}" target="_blank" class="cta-button" style="color: #ffffff;">Listen on Spotify</a>
                         </div>
                         <div class="footer">
-                            <p class="footer-text">© {current_year} {artist_name}.</p>
+                            <p class="footer-text">© {current_year} Fuzztracks.</p>
                         </div>
                     </div>
                 </td></tr>

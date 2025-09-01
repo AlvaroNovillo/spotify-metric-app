@@ -381,5 +381,79 @@ def filter_playlists_ai():
         return jsonify({"playlist_ids": final_playlist_ids})
     except Exception as e:
         print(f"[AI Filter V4] Error during AI-augmented filtering process: {e}"); traceback.print_exc(); return jsonify({"error": f"An unexpected error occurred during AI analysis: {e}"}), 500
+    
+
+
+# --- NEW ROUTE: To handle playlist file uploads ---
+@playlists_bp.route('/upload-playlists/<artist_id>', methods=['POST'])
+def upload_playlists_file(artist_id):
+    if 'playlist_file' not in request.files:
+        return jsonify({"error": "No file part in the request."}), 400
+    
+    file = request.files['playlist_file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected."}), 400
+
+    if file and file.filename.endswith('.xlsx'):
+        try:
+            df = pd.read_excel(file, engine='openpyxl')
+            
+            # --- Column Name Mapping (from Excel header to internal key) ---
+            COLUMN_MAP = {
+                'Playlist Name': 'name',
+                'Spotify URL': 'url',
+                'Curator Name': 'owner_name',
+                'Curator Email': 'email',
+                'Followers': 'followers',
+                'Total Tracks': 'tracks_total',
+                'Description': 'description',
+                'Found By Keyword': 'found_by',
+                'Contacted': 'contacted' # New column
+            }
+            
+            # Use the inverse map for validation against the DataFrame columns
+            REQUIRED_COLUMNS = ['Playlist Name', 'Spotify URL']
+            if not all(col in df.columns for col in REQUIRED_COLUMNS):
+                return jsonify({"error": f"Invalid Excel format. Missing required columns: {', '.join(REQUIRED_COLUMNS)}"}), 400
+
+            # Rename columns to match internal keys
+            df.rename(columns=COLUMN_MAP, inplace=True)
+            
+            processed_playlists = []
+            for record in df.to_dict(orient='records'):
+                playlist = {}
+                # Populate playlist with mapped keys found in the record
+                for key in COLUMN_MAP.values():
+                    playlist[key] = record.get(key)
+
+                # Extract real Spotify ID from URL
+                spotify_id = None
+                playlist_url = playlist.get('url')
+                if playlist_url and 'open.spotify.com/playlist/' in str(playlist_url):
+                    match = re.search(r'playlist/([a-zA-Z0-9]+)', str(playlist_url))
+                    if match:
+                        spotify_id = match.group(1)
+                playlist['id'] = spotify_id or f"local_{len(processed_playlists)}"
+
+                # Standardize the 'contacted' field to a boolean
+                contacted_val = playlist.get('contacted')
+                playlist['contacted'] = contacted_val == 1 or str(contacted_val).lower() == 'true'
+
+                # Ensure 'found_by' is a list
+                if isinstance(playlist.get('found_by'), str):
+                     playlist['found_by'] = [kw.strip() for kw in playlist['found_by'].split(',')]
+                
+                processed_playlists.append(playlist)
+            
+            print(f"[File Upload] Successfully processed {len(processed_playlists)} playlists from uploaded file.")
+            return jsonify(processed_playlists)
+
+        except Exception as e:
+            print(f"Error processing uploaded Excel file: {e}")
+            traceback.print_exc()
+            return jsonify({"error": f"An unexpected error occurred while processing the file: {e}"}), 500
+    
+    return jsonify({"error": "Invalid file type. Please upload a .xlsx file."}), 400
+
 
 # --- END OF (FIXED) FILE app/playlists/routes.py ---
