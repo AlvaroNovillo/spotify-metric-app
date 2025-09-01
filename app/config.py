@@ -29,5 +29,6 @@ class Config:
     # Email Sender Credentials (for SMTP)
     SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
     SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD") # Use App Password for Gmail
+    SMTP_LOGIN_USER = os.environ.get("SMTP_LOGIN_USER") # <-- ADD THIS LINE
     SMTP_SERVER = os.environ.get("SMTP_SERVER") or "smtp.gmail.com"
     SMTP_PORT = int(os.environ.get("SMTP_PORT") or 587)

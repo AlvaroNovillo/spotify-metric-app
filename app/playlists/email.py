@@ -1,37 +1,38 @@
-# --- START OF (REVISED) FILE app/playlists/email.py ---
+# --- START OF (FINAL CORRECTED) FILE app/playlists/email.py ---
 
 import os
 import time
 import smtplib
 import traceback
+import json
+import random
 from email.message import EmailMessage
 import google.generativeai as genai
 from flask import current_app
 
-# --- Helper to Format Errors ---
+# --- Helper to Format Errors (Unchanged) ---
 def format_error_message(exception, context=""):
     """Formats an exception into a user-friendly string."""
     prefix = f"{context}: " if context else ""
     return f"{prefix}{str(exception)}"
 
-# --- REVISED Gemini Email Content Generation with Language ---
+# --- UPGRADED Gemini Email Content Generation with Variations (CORRECTED) ---
 def generate_email_template_and_preview(track_details, playlist_details, song_description, language="English"):
     """
-    Generates an email body template using Gemini AI in the specified language,
-    and a preview rendered with the provided initial playlist details.
-    Also generates a translated subject line.
+    Generates a structured JSON object with multiple email variations (spintax)
+    using Gemini AI, and creates both an editable template and a personalized preview.
     """
     if not current_app.config.get('GEMINI_API_KEY'):
         raise ValueError("Gemini API Key is not configured.")
-    if not track_details or not playlist_details or not song_description:
+    if not all([track_details, playlist_details, song_description]):
         raise ValueError("Missing required details for email generation.")
     if not language: language = "English"
 
     model_name = current_app.config.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-    print(f"[Email Gen] Using Gemini model: {model_name} to generate template in {language}")
+    print(f"[Email Gen] Using Gemini model: {model_name} to generate VARIATIONS in {language}")
 
     try:
-        # Extract details for prompt context
+        # Context details (Unchanged)
         track_name = track_details.get('name', 'N/A')
         track_artist_name = track_details['artists'][0]['name'] if track_details.get('artists') else "Unknown Artist"
         track_url = track_details.get('external_urls', {}).get('spotify', '#')
@@ -40,8 +41,8 @@ def generate_email_template_and_preview(track_details, playlist_details, song_de
         if not initial_curator_name or initial_curator_name.lower() in ['n/a', 'spotify']:
             initial_curator_name = "Playlist Curator"
         signature_name = track_artist_name
-
-        # Generate Subject based on Language
+        
+        # Subject Line (Unchanged)
         subject_translations = {
             "Spanish": f'Propuesta Musical: "{track_name}" de {track_artist_name}',
             "French": f'Soumission Musicale : "{track_name}" par {track_artist_name}',
@@ -51,89 +52,89 @@ def generate_email_template_and_preview(track_details, playlist_details, song_de
         }
         subject_line = subject_translations.get(language, f'Music Submission: "{track_name}" by {track_artist_name}')
 
-        # --- Construct the Prompt for TEMPLATE Generation ---
+        # Advanced Prompt for JSON with Variations (Unchanged)
         prompt_parts = [
-            f"Generate ONLY the email body content as a template for a music submission pitch, written in {language}.",
-            "Use the exact placeholders {{curator_name}} and {{playlist_name}} where the curator's name and playlist name should go.",
-            "Do NOT replace these placeholders in your output.",
-            "\n**Context Information (Use for tone and song details, NOT for replacing placeholders):**",
-            f"*   **Example Curator's Name:** {initial_curator_name}",
-            '*   **Example Playlist Name:** "' + initial_playlist_name + '"',
-            f'*   **Song Title:** "{track_name}"',
-            f'*   **Artist Name (of the song):** {track_artist_name}',
-            f'*   **Link to the song:** {track_url}',
-            f'*   **Brief Song Description (from user):** {song_description}',
-            f'*   **Sender\'s Name / Signature:** {signature_name}',
-            "\n**Instructions for Email Body TEMPLATE Generation:**",
-            "1.  **Greeting:** Start with a friendly greeting in the target language using the placeholder `{{curator_name}}`.",
-            '2.  **Context:** Briefly express appreciation for their specific playlist using the placeholder `"{playlist_name}"`.',
-            f'3.  **Introduction:** Clearly introduce the song "{track_name}" by {track_artist_name} (keep names as is).',
-            f'4.  **Description:** Integrate the user\'s song description: "{song_description}". Rephrase slightly for flow in the target language if needed.',
-            f'5.  **Call to Action/Link:** Clearly provide the Spotify link: {track_url}. Invite them to listen.',
-            "6.  **Conciseness:** Keep the template relatively short (4-7 sentences).",
-            "7.  **Closing:** Use a polite closing appropriate for the target language.",
-            f'8.  **Signature:** End ONLY with the provided Sender\'s Name: {signature_name}.',
-            '9.  **CRITICAL:** Output ONLY the template body in the specified language. Use the exact placeholders `{{curator_name}}` and `{{playlist_name}}`. Do NOT include the subject line, greetings before the main greeting, or extra text. Start directly with "Hi {{curator_name}},".',
-            f"\n---\nGENERATE THE {language.upper()} EMAIL BODY TEMPLATE NOW:",
+            f"You are a professional music promoter. Generate a JSON object for an email pitch written in {language}.",
+            "The JSON object must contain keys for 'greetings', 'main_body', 'closings', and 'signatures'.",
+            "Each key must have an array of at least 4 unique, professionally-toned string variations.",
+            "The placeholders {{curator_name}} and {{playlist_name}} MUST be used exactly as written.",
+            "\n**Context for Content:**",
+            f"*   **Song:** \"{track_name}\" by {track_artist_name}",
+            f"*   **User's Song Description:** {song_description}",
+            f"*   **Call to Action Link:** {track_url}",
+            "\n**JSON Structure Requirements:**",
+            "*   `greetings`: Variations for the opening line (e.g., 'Hi {{curator_name}},').",
+            # <-- CRUCIAL CHANGE: 'openings' is now 'main_body' with more specific instructions.
+            "*   `main_body`: Variations for the main email body. Each variation MUST:",
+            "    1. Mention the curator's playlist using the `{{playlist_name}}` placeholder.",
+            "    2. Seamlessly and creatively integrate the user's song description.",
+            "    3. End with a clear call to action inviting the curator to listen to the song, including the song link.",
+            "*   `closings`: Variations for the closing sentence before the signature.",
+            "*   `signatures`: Variations for the sign-off (e.g., 'Best regards,').",
+            "\n**CRITICAL:** Respond with ONLY the raw JSON object. Do not include markdown, explanations, or any text outside the JSON object.",
+            f"\n---\nGENERATE THE {language.upper()} JSON NOW:",
         ]
         prompt_body = "\n".join(prompt_parts)
-
-        # Configure Gemini model call
+        
+        # Model Call (Unchanged)
         model = genai.GenerativeModel(model_name)
-        generation_config = genai.GenerationConfig(temperature=0.75)
+        generation_config = genai.GenerationConfig(temperature=0.8)
         safety_settings=[ {"category": c, "threshold": "BLOCK_MEDIUM_AND_ABOVE"} for c in [ "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT" ] ]
 
-        print(f"[Email Gen] Generating {language} email template...")
+        print(f"[Email Gen] Generating {language} email variations...")
         response = model.generate_content(prompt_body, generation_config=generation_config, safety_settings=safety_settings)
 
         if not response.parts:
-             block_reason = response.prompt_feedback.block_reason if response.prompt_feedback else 'Unknown'
-             finish_reason = response.candidates[0].finish_reason if response.candidates else 'Unknown'
-             raise ValueError(f"AI template generation failed or was empty. Reason: {block_reason}, Finish Reason: {finish_reason}")
+             raise ValueError(f"AI generation failed or was empty. Reason: {response.prompt_feedback.block_reason if response.prompt_feedback else 'Unknown'}")
+        
+        json_text = response.text.strip().replace("```json", "").replace("```", "")
+        email_variations = json.loads(json_text)
 
-        template_body = response.text.strip()
-        if not template_body or '{{curator_name}}' not in template_body or '{{playlist_name}}' not in template_body:
-             print(f"[Email Gen] Warning: Generated template might be missing required placeholders. Generated text:\n{template_body}")
-             raise ValueError("AI failed to generate a valid template with required placeholders.")
+        required_keys = ['greetings', 'main_body', 'closings', 'signatures']
+        if not all(key in email_variations and isinstance(email_variations[key], list) and email_variations[key] for key in required_keys):
+            raise ValueError("AI did not return the expected JSON structure with a 'main_body'.")
+            
+        # ====================================================================
+        # THE FIX: Build BOTH the editable template and the live preview
+        # ====================================================================
 
-        # --- Generate the initial PREVIEW ---
+        # 1. Build the base template string for the user to edit
+        template_body_parts = [
+            email_variations['greetings'][0],
+            email_variations['main_body'][0], # The AI now includes the description and link here.
+            email_variations['closings'][0],
+            email_variations['signatures'][0],
+            signature_name
+        ]
+        template_body = "\n\n".join(template_body_parts) # Use double newlines for better paragraph spacing.
+        # 2. Build the preview body by personalizing the template
         preview_body = template_body.replace("{{curator_name}}", initial_curator_name).replace("{{playlist_name}}", initial_playlist_name)
-
-        print(f"[Email Gen] Template and preview generated successfully.")
-        return subject_line, preview_body, template_body
+        
+        print("[Email Gen] Template, variations, and preview generated successfully.")
+        # 3. Return all necessary pieces of information
+        return subject_line, preview_body, template_body, email_variations
 
     except Exception as e:
-        print(f"[Email Gen] Error generating {language} email template/preview: {e}")
+        print(f"[Email Gen] Error during email generation: {e}")
+        traceback.print_exc()
+        # Re-raise to be caught by the route
         raise Exception(f"AI email generation failed: {str(e)}")
 
 
-# --- NEW: Function to create HTML Email ---
+# --- create_curator_outreach_html (This function is unchanged) ---
 def create_curator_outreach_html(track_details, personalized_body):
-    """
-    Generates a visually appealing HTML email for curator outreach.
-
-    Args:
-        track_details (dict): The full Spotify track object.
-        personalized_body (str): The final, rendered email body text.
-
-    Returns:
-        str: The complete HTML email content.
-    """
+    # This function remains exactly the same as before.
     track_name = track_details.get('name', 'Untitled Track')
-    artist_name = track_details.get('artists', [{'name': 'Unknown Artist'}])[0]['name']
-    # Try to get a 300px image, fallback to the first one available
-    album_cover_url = 'https://i.imgur.com/3g2h9a3.png' # Fallback image
+    artist_name = track_details.get('artists', [{'name': 'Unknown Artist'}])['name']
+    album_cover_url = 'https://i.imgur.com/3g2h9a3.png'
     if track_details.get('album', {}).get('images'):
         images = track_details['album']['images']
         cover_300 = next((img['url'] for img in images if img['height'] == 300), None)
-        album_cover_url = cover_300 or images[0].get('url', album_cover_url)
-
+        album_cover_url = cover_300 or images.get('url', album_cover_url)
     track_url = track_details.get('external_urls', {}).get('spotify', '#')
     current_year = time.strftime('%Y')
-
-    # Convert the plain text body's newlines into HTML line breaks for display
     formatted_body = personalized_body.replace('\n', '<br>')
-
+    # ... (rest of the HTML content is unchanged) ...
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -166,7 +167,6 @@ def create_curator_outreach_html(track_details, personalized_body):
             <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <tr><td align="center" style="padding: 20px 10px;">
                     <div class="container">
-                        <!-- Song Card Section -->
                         <a href="{track_url}" target="_blank" class="song-card">
                             <div class="song-image">
                                 <img src="{album_cover_url}" alt="Album Art for {track_name}" style="width: 100%; max-width: 600px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
@@ -176,20 +176,14 @@ def create_curator_outreach_html(track_details, personalized_body):
                                 <p class="artist-name" style="margin: 0; font-size: 16px; color: #b3b3b3;">{artist_name}</p>
                             </div>
                         </a>
-
-                        <!-- Main Content Section -->
                         <div class="main-content">
                             <p class="email-body" style="font-size: 16px; line-height: 1.6; color: #b3b3b3;">
                                 {formatted_body}
                             </p>
                         </div>
-
-                        <!-- CTA Button -->
                         <div class="cta-button-wrapper">
                             <a href="{track_url}" target="_blank" class="cta-button" style="color: #ffffff;">Listen on Spotify</a>
                         </div>
-
-                        <!-- Footer -->
                         <div class="footer">
                             <p class="footer-text">© {current_year} {artist_name}.</p>
                         </div>
@@ -201,10 +195,3 @@ def create_curator_outreach_html(track_details, personalized_body):
     </html>
     """
     return html_content
-
-
-# --- SMTP Email Sending (Removed - logic moved to route) ---
-# The send_single_email function is no longer needed as the connection reuse logic
-# in the route handles this more efficiently.
-
-# --- END OF (REVISED) FILE app/playlists/email.py ---

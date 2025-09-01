@@ -98,6 +98,7 @@
 
 {# --- [FIXED] Email Overlay Modal (Restored) --- #}
 <div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
         <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Generate & Send Outreach Emails</h2>
         <div class="mb-4 border-b border-gray-700 pb-4 flex-shrink-0">
@@ -112,9 +113,19 @@
                          <option value="English" selected>English</option> <option value="Spanish">Spanish</option> <option value="French">French</option> <option value="German">German</option> <option value="Portuguese">Portuguese</option> <option value="Italian">Italian</option>
                      </select>
                      <div class="mt-2">
-                        <label for="bcc-email-input" class="block text-gray-300 text-sm font-semibold mb-1">3. Send a copy (BCC) to (optional):</label>
-                        <input type="email" id="bcc-email-input" placeholder="your.verification.email@example.com" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
-                     </div>
+                        <!-- NEW: Email Limit Input -->
+                        <label for="email-limit-input" class="block text-gray-300 text-sm font-semibold mb-1">
+                            Max number of emails to send (Limit: 300):
+                        </label>
+                        <input type="number" id="email-limit-input" value="300" min="1" max="300"
+                               class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                    </div>
+                    
+                    <div class="mt-2">
+                       <label for="bcc-email-input" class="block text-gray-300 text-sm font-semibold mb-1">Send a copy (BCC) to (optional):</label>
+                       <input type="email" id="bcc-email-input" placeholder="your.verification.email@example.com" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                    </div>
+                    
                 </div>
             </div>
             <button type="button" id="generate-email-button" class="w-full md:w-1/2 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50 disabled:cursor-wait">
@@ -125,7 +136,7 @@
         <div id="email-preview-edit-section" class="hidden flex-grow min-h-0 overflow-hidden flex flex-col">
             <p class="text-sm text-gray-400 mb-1 flex-shrink-0">4. Review & Edit the generated template below.</p>
             <p class="text-xs text-yellow-400 mb-4 text-center flex-shrink-0">
-                <strong class="font-semibold">Important:</strong> Personalize this template to improve deliverability! Emails will be sent slowly (25-60s delay) to respect rate limits.
+                <strong class="font-semibold">Important:</strong>  Emails will be sent with randomized phrasing to improve deliverability. Sending is rate-limited (25-60s delay per email).
             </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                 <div class="flex flex-col">
@@ -195,6 +206,7 @@
     // --- Global State Variables ---
     const currentArtistId = {{ artist_id | tojson }};
     let allFoundPlaylists = []; // Master list of all playlists found in a search
+    let emailContentVariations = {}; // NEW: To store the AI-generated variations
 
     // --- Helper Function to get currently visible playlists ---
     // This is the source of truth for the Contact and Download features.
@@ -388,55 +400,72 @@
     }
 
     function generateEmailAction() {
+        // Get all necessary DOM elements
         const subjectEditorEl = document.getElementById('preview-subject-editor');
         const previewBodyEl = document.getElementById('preview-body');
-        const templateEditorEl = document.getElementById('template-body-editor');
+        const templateEditorEl = document.getElementById('template-body-editor'); // The editable textarea
         const descriptionEditor = document.getElementById('song-description-editor');
         const langSelector = document.getElementById('language-selector');
         const generateBtn = document.getElementById('generate-email-button');
         const sendBtn = document.getElementById('confirm-send-button');
         const previewEditSection = document.getElementById('email-preview-edit-section');
         const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-
-        // [FIX] Define button text/loading elements and language variable
+        
         const loadingText = generateBtn.querySelector('.button-loading');
         const buttonText = generateBtn.querySelector('.button-text');
         const language = langSelector.value;
 
-        if (!selectedTrackInput) { alert('Please select a track first.'); return; }
+        // Validation (Unchanged)
+        if (!selectedTrackInput) {
+            alert('Please select a track first.');
+            return;
+        }
         const songDescription = descriptionEditor.value.trim();
-        if (!songDescription) { alert('Please enter a song description.'); descriptionEditor.focus(); return; }
-        
+        if (!songDescription) {
+            alert('Please enter a song description for the AI to use.');
+            descriptionEditor.focus();
+            return;
+        }
+
         const visiblePlaylists = getVisiblePlaylists();
         const firstPlaylist = visiblePlaylists.find(p => p && p.email && p.email.includes('@'));
-
         if (!firstPlaylist) {
             alert("No contactable playlists are visible with the current filter. Cannot generate a preview.");
             return;
         }
 
-        exampleCuratorName = firstPlaylist.owner_name || "Playlist Curator";
-        if (exampleCuratorName.toLowerCase() === 'n/a' || exampleCuratorName.toLowerCase() === 'spotify') {
-             exampleCuratorName = "Playlist Curator";
-        }
-        examplePlaylistName = firstPlaylist.name || "Your Playlist";
+        // Set UI to Loading State (Unchanged)
+        generateBtn.disabled = true;
+        loadingText.classList.remove('hidden');
+        buttonText.classList.add('hidden');
+        previewEditSection.classList.add('hidden');
+        sendBtn.classList.add('hidden');
+        sendBtn.disabled = true;
 
-        const trackId = selectedTrackInput.value;
-
-        generateBtn.disabled = true; loadingText.classList.remove('hidden'); buttonText.classList.add('hidden');
-        previewEditSection.classList.add('hidden'); sendBtn.classList.add('hidden'); sendBtn.disabled = true;
-
+        // Fetch AI-Generated Content
         fetch("{{ url_for('playlists.generate_preview_email_route') }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ track_id: trackId, song_description: songDescription, language: language, playlist: firstPlaylist })
+            body: JSON.stringify({
+                track_id: selectedTrackInput.value,
+                song_description: songDescription,
+                language: language,
+                playlist: firstPlaylist
+            })
         })
         .then(response => response.ok ? response.json() : response.json().then(err => Promise.reject(err)))
         .then(data => {
             if (data.error) throw new Error(data.error);
+
+            // --- THE FIX IS HERE: Populate ALL fields from the response ---
             subjectEditorEl.value = data.subject || '';
             previewBodyEl.textContent = data.preview_body || '';
-            templateEditorEl.value = data.template_body || '';
+            templateEditorEl.value = data.template_body || ''; // This populates the editable body
+            
+            // Store the structured variations object for the sending process
+            emailContentVariations = data.variations || {}; 
+            
+            // Show the preview and enable the send button
             previewEditSection.classList.remove('hidden');
             sendBtn.classList.remove('hidden');
             sendBtn.disabled = false;
@@ -445,13 +474,16 @@
             console.error("Error fetching email preview:", error);
             subjectEditorEl.value = 'Error';
             previewBodyEl.textContent = `Failed to generate: ${error.message || 'Unknown error'}`;
+            templateEditorEl.value = `An error occurred: ${error.message || 'Unknown error'}`;
         })
         .finally(() => {
+            // Reset the generate button's state
             generateBtn.disabled = false;
             loadingText.classList.add('hidden');
             buttonText.classList.remove('hidden');
         });
     }
+
 
     function updateLivePreview() {
         const template = document.getElementById('template-body-editor').value;
@@ -465,66 +497,113 @@
         document.getElementById('email-overlay').classList.add('hidden');
     }
 
+
     function confirmAndSendEmails() {
-        const editedTemplateBody = document.getElementById('template-body-editor').value.trim();
+        // --- 1. Get all required data from the UI and global state ---
+        const emailLimitInput = document.getElementById('email-limit-input');
         const editedSubject = document.getElementById('preview-subject-editor').value.trim();
         const bccEmail = document.getElementById('bcc-email-input').value.trim();
-
-        if (!editedSubject || !editedTemplateBody) {
-            alert("Subject and body cannot be empty."); return;
-        }
-
-        const playlistsToContact = getVisiblePlaylists().filter(p => p && p.email && p.email.includes('@'));
-        
-        if (playlistsToContact.length === 0) {
-            alert("There are no contactable playlists in the current view."); return;
-        }
-
-        const confirmationMessage = `You are about to send emails to the ${playlistsToContact.length} currently visible contactable playlists. Continue?`;
-        if (!confirm(confirmationMessage)) return;
-        
-        cancelEmailSend();
-
+        const editedTemplateBody = document.getElementById('template-body-editor').value.trim();
+        const trackIdInput = document.querySelector('input[name="selected_track_id"]:checked');
         const contactButton = document.getElementById('contact-curators-button');
         const emailLog = document.getElementById('email-log');
-        const trackId = document.querySelector('input[name="selected_track_id"]:checked').value;
+
+        // --- 2. Validation ---
+        if (!trackIdInput) {
+            alert("Error: A track is not selected. Please re-select a track.");
+            return;
+        }
+        const trackId = trackIdInput.value;
+
+        let emailLimit = parseInt(emailLimitInput.value, 10);
+        if (isNaN(emailLimit) || emailLimit < 1) {
+            alert("Please enter a valid number for the email limit (1 or more).");
+            emailLimitInput.focus();
+            return;
+        }
+        if (emailLimit > 300) emailLimit = 300; // Enforce max limit
+
+        if (!editedSubject || !editedTemplateBody) {
+            alert("The subject and the template body cannot be empty.");
+            return;
+        }
+        if (Object.keys(emailContentVariations).length === 0) {
+            alert("Email variations have not been generated. Please click 'Generate Template & Preview' first.");
+            return;
+        }
+
+        // --- 3. Prepare Playlist Data ---
+        const allContactablePlaylists = getVisiblePlaylists().filter(p => p && p.email && p.email.includes('@'));
+        if (allContactablePlaylists.length === 0) {
+            alert("There are no contactable playlists in the current view to send emails to.");
+            return;
+        }
+
+        // Apply the user-defined limit to the playlist array
+        const isLimited = allContactablePlaylists.length > emailLimit;
+        const playlistsToContact = allContactablePlaylists.slice(0, emailLimit);
+
+        // --- 4. User Confirmation ---
+        const confirmationMessage = `You are about to send emails to ${playlistsToContact.length} currently visible contactable playlists.${isLimited ? ` (Limited from ${allContactablePlaylists.length} total)` : ''}\n\nContinue?`;
+        if (!confirm(confirmationMessage)) {
+            return;
+        }
         
+        // --- 5. Set UI to Sending State ---
+        cancelEmailSend(); // Hide the modal
         contactButton.disabled = true;
         contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>';
         emailLog.textContent = `Initializing email process for ${playlistsToContact.length} playlists...\n`;
         document.getElementById('email-status-container').style.display = 'block';
 
+        // --- 6. Fetch the Event Stream to Send Emails ---
         fetch("{{ url_for('playlists.send_emails_route') }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
             body: JSON.stringify({
-                track_id: trackId, playlists: playlistsToContact, subject: editedSubject,
-                template_body: editedTemplateBody, bcc_email: bccEmail
+                track_id: trackId,
+                playlists: playlistsToContact,
+                subject: editedSubject,
+                variations: emailContentVariations, // Send the raw variations for backend randomization
+                template_body: editedTemplateBody, // Send the user's final edited version
+                bcc_email: bccEmail
             })
         })
         .then(response => {
-             if (!response.ok) throw new Error(`Server error: ${response.status}`);
-             const reader = response.body.getReader();
-             const decoder = new TextDecoder();
-             
-             function processStream({ done, value }) {
-                 if (done) {
-                     contactButton.disabled = false;
-                     contactButton.innerHTML = 'Contact Curators...';
-                     return;
-                 }
-                 const chunk = decoder.decode(value, { stream: true });
-                 emailLog.textContent += chunk; // Assuming server sends formatted lines
-                 emailLog.scrollTop = emailLog.scrollHeight;
-                 reader.read().then(processStream);
-             }
-             reader.read().then(processStream);
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            // Function to recursively process the stream
+            function processStream({ done, value }) {
+                if (done) {
+                    // Reset the button once the stream is fully complete
+                    contactButton.disabled = false;
+                    contactButton.innerHTML = 'Contact Curators...';
+                    return;
+                }
+                const chunk = decoder.decode(value, { stream: true });
+                
+                // SSE format can send multiple events in one chunk, separated by \n\n
+                const lines = chunk.split('\n\n');
+                lines.forEach(line => {
+                    if (line.startsWith('data: ')) {
+                        // Append the actual data message to the log
+                        emailLog.textContent += line.substring(6).trim() + '\n';
+                    }
+                });
+
+                emailLog.scrollTop = emailLog.scrollHeight; // Auto-scroll to the bottom
+                reader.read().then(processStream); // Read the next chunk
+            }
+            reader.read().then(processStream);
         })
         .catch(error => {
-             console.error("Error sending emails:", error);
-             emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
-             contactButton.disabled = false;
-             contactButton.innerHTML = 'Contact Curators...';
+            // --- 7. Error Handling ---
+            console.error("Error during email sending stream:", error);
+            emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
+            contactButton.disabled = false;
+            contactButton.innerHTML = 'Contact Curators...';
         });
     }
 

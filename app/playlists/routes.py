@@ -288,27 +288,50 @@ def playlist_finder(artist_id):
 
 @playlists_bp.route('/generate-preview-email', methods=['POST'])
 def generate_preview_email_route():
-    # This route has no changes from the original code
     sp = get_spotify_client_credentials_client()
     if not sp: return jsonify({"error": "Spotify API client failed to initialize."}), 503
     if not current_app.config.get('GEMINI_API_KEY'): return jsonify({"error": "AI API Key is not configured."}), 500
-    data = request.get_json();
+    
+    data = request.get_json()
     if not data: return jsonify({"error": "Missing request data."}), 400
-    track_id = data.get('track_id'); playlist = data.get('playlist'); language = data.get('language', 'English'); song_description = data.get('song_description')
-    if not track_id or not song_description or not playlist or not isinstance(playlist, dict): return jsonify({"error": "Missing required fields (track_id, song_description, playlist)."}), 400
+    
+    track_id = data.get('track_id')
+    playlist = data.get('playlist')
+    language = data.get('language', 'English')
+    song_description = data.get('song_description')
+
+    if not all([track_id, song_description, playlist, isinstance(playlist, dict)]):
+        return jsonify({"error": "Missing required fields (track_id, song_description, playlist)."}), 400
+        
     try:
-        market = 'US'; track = sp.track(track_id, market=market)
+        market = 'US'
+        track = sp.track(track_id, market=market)
         if not track: raise ValueError(f"Could not fetch details for track ID: {track_id}")
-        subject, preview_body, template_body = generate_email_template_and_preview(track, playlist, song_description, language)
-        return jsonify({"subject": subject, "preview_body": preview_body, "template_body": template_body})
+        
+        # Unpack all four return values from the corrected function
+        subject, preview_body, template_body, variations = generate_email_template_and_preview(
+            track, playlist, song_description, language
+        )
+        
+        # Send all four pieces of data to the frontend
+        return jsonify({
+            "subject": subject,
+            "preview_body": preview_body,
+            "template_body": template_body, # This will populate the editor
+            "variations": variations
+        })
+        
     except (ValueError, spotipy.exceptions.SpotifyException) as e:
-         error_msg = format_error_message(e, "Preview Generation Failed"); status_code = 400 if isinstance(e, ValueError) else 502; print(f"Error generating preview/template: {error_msg}"); return jsonify({"error": error_msg}), status_code
+         error_msg = format_error_message(e, "Preview Generation Failed")
+         status_code = 400 if isinstance(e, ValueError) else 502
+         print(f"Error generating preview/template: {error_msg}")
+         return jsonify({"error": error_msg}), status_code
     except Exception as e:
-        print(f"Unexpected error generating email preview/template: {e}");
+        print(f"Unexpected error generating email preview/template: {e}")
         error_msg = format_error_message(e, "Unexpected error generating preview/template.")
         return jsonify({"error": error_msg}), 500
-
-
+    
+    
 @playlists_bp.route('/send-emails', methods=['POST'])
 def send_emails_route():
     # This route has no changes from the original code
@@ -334,15 +357,20 @@ def send_emails_route():
     edited_subject = data.get('subject')
     selected_track_id = data.get('track_id')
     playlists_to_contact = data.get('playlists', [])
-    edited_template_body = data.get('template_body')
+    # NEW: Receive the variations object instead of a single template
+    email_variations = data.get('variations') 
+    song_description = data.get('song_description') # We need this again
     bcc_email = data.get('bcc_email', '').strip()
 
-    if not all([edited_subject, edited_template_body, selected_track_id, playlists_to_contact]):
-        return Response("event: error\ndata: Missing required fields (subject, template, track, playlists)\n\n", mimetype='text/event-stream', status=400)
-    if '{{curator_name}}' not in edited_template_body or '{{playlist_name}}' not in edited_template_body:
-        return Response("event: error\ndata: Edited template seems to be missing required placeholders {{curator_name}} or {{playlist_name}}\n\n", mimetype='text/event-stream', status=400)
+    # MODIFIED: Check for the new required fields
+    if not all([edited_subject, email_variations, selected_track_id, playlists_to_contact, song_description]):
+        return Response("event: error\ndata: Missing required fields (subject, variations, track, playlists, description)\n\n", mimetype='text/event-stream', status=400)
     if not playlists_to_contact:
         return Response("event: status\ndata: No playlists provided\nevent: done\ndata: Finished.\n\n", mimetype='text/event-stream')
+    
+    # NEW: Server-side limit check
+    if len(playlists_to_contact) > 300:
+        playlists_to_contact = playlists_to_contact[:300]
 
     def email_stream():
         track = None
@@ -376,7 +404,12 @@ def send_emails_route():
                      server.starttls()
                      server.ehlo()
                 yield_message('status', 'SMTP connection established. Logging in...')
-                server.login(sender_email, sender_password)
+                smtp_login_user = current_app.config.get("SMTP_LOGIN_USER") or sender_email
+                 # --- ADD THESE TWO LINES FOR DEBUGGING ---
+                print(f"FLASK IS USING USERNAME: '{smtp_login_user}'")
+                print(f"FLASK IS USING PASSWORD: '{sender_password}'")
+                # --- END OF DEBUGGING LINES ---
+                server.login(smtp_login_user, sender_password)
                 yield_message('status', 'SMTP login successful. Starting email batch.')
             except smtplib.SMTPAuthenticationError as auth_err:
                 raise ConnectionError(f"SMTP Auth Error: {auth_err}. Check email/password/App Password.") from auth_err
@@ -400,7 +433,25 @@ def send_emails_route():
                 try:
                     actual_curator_name = playlist.get('owner_name') or "Playlist Curator"
                     if actual_curator_name.lower() in ['n/a', 'spotify']: actual_curator_name = "Playlist Curator"
-                    personalized_body = edited_template_body.replace("{{curator_name}}", actual_curator_name).replace("{{playlist_name}}", playlist_name)
+                
+                    # --- DYNAMIC EMAIL ASSEMBLY ---
+                    # For each curator, pick one random part from each category.
+                    greeting = random.choice(email_variations['greetings'])
+                    main_body = random.choice(email_variations['main_body']) # This now contains the description/link
+                    closing = random.choice(email_variations['closings'])
+                    signature_line = random.choice(email_variations['signatures'])
+
+                    personalized_body_parts = [
+                        greeting,
+                        main_body,
+                        closing,
+                        signature_line,
+                        track_artist_name
+                    ]
+                    personalized_body = "\n\n".join(personalized_body_parts)
+
+                    # Now, replace the placeholders in the fully assembled text
+                    personalized_body = personalized_body.replace("{{curator_name}}", actual_curator_name).replace("{{playlist_name}}", playlist_name)
 
                     html_body = create_curator_outreach_html(track, personalized_body)
                     subject = edited_subject
@@ -408,7 +459,7 @@ def send_emails_route():
                     yield_message('status', f"-> Sending email to {curator_email}...")
                     msg = EmailMessage()
                     msg['Subject'] = subject
-                    msg['From'] =  f"Sebraca <{sender_email}>"
+                    msg['From'] =  f"FuzzTracks <{sender_email}>"
                     msg['To'] = curator_email
                     msg.set_content(personalized_body, subtype='plain')
                     msg.add_alternative(html_body, subtype='html')
