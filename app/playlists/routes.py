@@ -191,6 +191,85 @@ def playlist_finder(artist_id):
     return Response(stream_with_context(generate_response()), mimetype='text/html')
 
 
+# --- NEW ROUTE: For handling Excel file uploads ---
+@playlists_bp.route('/playlist-finder/upload/<artist_id>', methods=['POST'])
+def upload_playlists(artist_id):
+    if 'playlist_file' not in request.files:
+        return jsonify({"error": "No file part in the request."}), 400
+    file = request.files['playlist_file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected."}), 400
+    if not file or not (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
+        return jsonify({"error": "Invalid file type. Please upload an Excel file (.xlsx)."}), 400
+
+    try:
+        df = pd.read_excel(file)
+        
+        # --- Define schema and mapping ---
+        column_map = {
+            'Playlist Name': 'name', 'Spotify URL': 'url', 'Curator Name': 'owner_name',
+            'Curator Email': 'email', 'Followers': 'followers', 'Total Tracks': 'tracks_total',
+            'Description': 'description', 'Found By Keyword': 'found_by', 'Contacted': 'contacted'
+        }
+        
+        # --- Validate required columns ---
+        required_cols = ['Playlist Name', 'Spotify URL']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            return jsonify({"error": f"Missing required columns in Excel file: {', '.join(missing_cols)}"}), 400
+
+        # --- Filter out contacted playlists ---
+        if 'Contacted' in df.columns:
+            # Ensure the 'Contacted' column is numeric, coercing errors to NaN, then fill NaN with 0
+            df['Contacted'] = pd.to_numeric(df['Contacted'], errors='coerce').fillna(0)
+            initial_count = len(df)
+            df = df[df['Contacted'] != 1]
+            print(f"[Upload] Filtered out {initial_count - len(df)} contacted playlists.")
+
+        # --- Convert DataFrame to list of dicts ---
+        processed_playlists = []
+        for _, row in df.iterrows():
+            playlist_dict = {}
+            for excel_col, dict_key in column_map.items():
+                if excel_col in row:
+                    value = row[excel_col]
+                    # Handle pandas NaN values, which are not JSON serializable
+                    playlist_dict[dict_key] = None if pd.isna(value) else value
+            
+            # --- Extract Spotify ID (Crucial Step) ---
+            spotify_id = None
+            playlist_url = playlist_dict.get('url')
+            if playlist_url and isinstance(playlist_url, str) and 'open.spotify.com/playlist/' in playlist_url:
+                match = re.search(r'playlist/([a-zA-Z0-9]+)', playlist_url)
+                if match:
+                    spotify_id = match.group(1)
+            
+            if not spotify_id:
+                print(f"[Upload] Skipping row with invalid Spotify URL: {playlist_url}")
+                continue # Skip playlists without a valid ID
+
+            playlist_dict['id'] = spotify_id
+            
+            # Ensure 'found_by' is a list
+            if 'found_by' in playlist_dict and isinstance(playlist_dict['found_by'], str):
+                playlist_dict['found_by'] = [kw.strip() for kw in playlist_dict['found_by'].split(',')]
+            elif 'found_by' not in playlist_dict:
+                 playlist_dict['found_by'] = ['uploaded']
+
+
+            processed_playlists.append(playlist_dict)
+        
+        # Sort by followers, similar to the main search
+        sorted_playlists = sorted(processed_playlists, key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
+
+        return jsonify({"playlists": sorted_playlists})
+
+    except Exception as e:
+        print(f"Error processing uploaded playlist file: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"An unexpected error occurred while processing the file: {e}"}), 500
+
+
 
 @playlists_bp.route('/generate-preview-email', methods=['POST'])
 def generate_preview_email_route():
@@ -384,76 +463,3 @@ def filter_playlists_ai():
     
 
 
-# --- NEW ROUTE: To handle playlist file uploads ---
-@playlists_bp.route('/upload-playlists/<artist_id>', methods=['POST'])
-def upload_playlists_file(artist_id):
-    if 'playlist_file' not in request.files:
-        return jsonify({"error": "No file part in the request."}), 400
-    
-    file = request.files['playlist_file']
-    if file.filename == '':
-        return jsonify({"error": "No file selected."}), 400
-
-    if file and file.filename.endswith('.xlsx'):
-        try:
-            df = pd.read_excel(file, engine='openpyxl')
-            
-            # --- Column Name Mapping (from Excel header to internal key) ---
-            COLUMN_MAP = {
-                'Playlist Name': 'name',
-                'Spotify URL': 'url',
-                'Curator Name': 'owner_name',
-                'Curator Email': 'email',
-                'Followers': 'followers',
-                'Total Tracks': 'tracks_total',
-                'Description': 'description',
-                'Found By Keyword': 'found_by',
-                'Contacted': 'contacted' # New column
-            }
-            
-            # Use the inverse map for validation against the DataFrame columns
-            REQUIRED_COLUMNS = ['Playlist Name', 'Spotify URL']
-            if not all(col in df.columns for col in REQUIRED_COLUMNS):
-                return jsonify({"error": f"Invalid Excel format. Missing required columns: {', '.join(REQUIRED_COLUMNS)}"}), 400
-
-            # Rename columns to match internal keys
-            df.rename(columns=COLUMN_MAP, inplace=True)
-            
-            processed_playlists = []
-            for record in df.to_dict(orient='records'):
-                playlist = {}
-                # Populate playlist with mapped keys found in the record
-                for key in COLUMN_MAP.values():
-                    playlist[key] = record.get(key)
-
-                # Extract real Spotify ID from URL
-                spotify_id = None
-                playlist_url = playlist.get('url')
-                if playlist_url and 'open.spotify.com/playlist/' in str(playlist_url):
-                    match = re.search(r'playlist/([a-zA-Z0-9]+)', str(playlist_url))
-                    if match:
-                        spotify_id = match.group(1)
-                playlist['id'] = spotify_id or f"local_{len(processed_playlists)}"
-
-                # Standardize the 'contacted' field to a boolean
-                contacted_val = playlist.get('contacted')
-                playlist['contacted'] = contacted_val == 1 or str(contacted_val).lower() == 'true'
-
-                # Ensure 'found_by' is a list
-                if isinstance(playlist.get('found_by'), str):
-                     playlist['found_by'] = [kw.strip() for kw in playlist['found_by'].split(',')]
-                
-                processed_playlists.append(playlist)
-            
-            print(f"[File Upload] Successfully processed {len(processed_playlists)} playlists from uploaded file.")
-            return jsonify(processed_playlists)
-
-        except Exception as e:
-            print(f"Error processing uploaded Excel file: {e}")
-            traceback.print_exc()
-            return jsonify({"error": f"An unexpected error occurred while processing the file: {e}"}), 500
-    
-    return jsonify({"error": "Invalid file type. Please upload a .xlsx file."}), 400
-
-
-# --- END OF (FIXED) FILE app/playlists/routes.py ---

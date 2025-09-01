@@ -1,4 +1,4 @@
-{# --- START OF (FIXED & COMPLETE) FILE templates/playlist_finder_base.html --- #}
+{# --- START OF (CORRECTED & COMPLETE) FILE templates/playlist_finder_base.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}
@@ -14,6 +14,21 @@
 
     {# --- Left Column (Wider): Form --- #}
     <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        
+        {# --- NEW: Upload Section (Preserved) --- #}
+        <div class="mb-6 pb-6 border-b border-gray-700">
+            <h2 class="text-xl font-semibold mb-3 text-center">Have a list already?</h2>
+             <form id="upload-form" class="text-center">
+                <label for="playlist-upload-input" class="w-full cursor-pointer bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-3 px-4 rounded transition duration-300 inline-block">
+                    <span id="upload-label-text">📂 Upload Playlist Excel File</span>
+                </label>
+                <input type="file" id="playlist-upload-input" class="hidden" accept=".xlsx, .xls">
+                <p id="upload-status" class="text-xs text-gray-500 mt-2 h-4"></p>
+             </form>
+             <p class="text-center text-gray-500 my-2">OR</p>
+        </div>
+
+
         <form method="GET" action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
             
             {# 1. Track Selection #}
@@ -69,7 +84,11 @@
                  <input type="text" name="user_keywords" id="user_keywords" value="{{ request.args.get('user_keywords', '') }}" placeholder="e.g., chill vibes, workout, study" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
             </div>
              <div class="space-y-4 mt-6">
-                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Find Playlists</button>
+                 {# --- BUTTON FIX: Added spans for loading state --- #}
+                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg disabled:opacity-50 disabled:cursor-wait">
+                    <span class="button-text">Find Playlists</span>
+                    <span class="button-loading hidden animate-pulse">Searching...</span>
+                 </button>
                  <div id="post-search-actions" class="hidden flex flex-col sm:flex-row gap-4">
                     <button type="button" id="contact-curators-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Contact Curators...</button>
                     <button type="button" id="show-download-modal-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Download Results...</button>
@@ -86,7 +105,7 @@
              <div id="keywords-display-area" class="mt-3 text-xs text-gray-400" style="display: none;"><strong>Using keywords:</strong> <span id="keywords-list"></span>...</div>
         </div>
         <div id="playlist-results-container" class="flex-grow min-h-[200px]">
-            {% if not request.args.get('selected_track_id') %}<div class="flex items-center justify-center h-full"><p class="text-center text-gray-500 italic">Select a song and click "Find Playlists" to see results.</p></div>{% endif %}
+            {% if not request.args.get('selected_track_id') %}<div class="flex items-center justify-center h-full"><p class="text-center text-gray-500 italic">Select a song and click "Find Playlists" or upload a file to see results.</p></div>{% endif %}
         </div>
          <div id="email-status-container" class="mt-6 hidden">
               <h3 class="text-lg font-semibold mb-3 text-center text-gray-300">Email Sending Progress</h3>
@@ -96,7 +115,7 @@
 
 </div>{# End Main Grid #}
 
-{# --- [FIXED] Email Overlay Modal (Restored) --- #}
+{# --- Email Overlay Modal --- #}
 <div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
 
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
@@ -113,7 +132,6 @@
                          <option value="English" selected>English</option> <option value="Spanish">Spanish</option> <option value="French">French</option> <option value="German">German</option> <option value="Portuguese">Portuguese</option> <option value="Italian">Italian</option>
                      </select>
                      <div class="mt-2">
-                        <!-- NEW: Email Limit Input -->
                         <label for="email-limit-input" class="block text-gray-300 text-sm font-semibold mb-1">
                             Max number of emails to send (Limit: 300):
                         </label>
@@ -166,7 +184,7 @@
     </div>
 </div>
 
-{# --- [FIXED] Playlist Download Modal (Restored) --- #}
+{# --- Playlist Download Modal (with Contacted column) --- #}
 <div id="download-playlist-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
     <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-600">
         <h3 class="text-xl font-bold mb-4 text-center text-green-300">Download Playlist Results</h3>
@@ -181,6 +199,7 @@
                 <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="tracks_total" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Total Tracks</span></label>
                 <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="description" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Description</span></label>
                 <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="found_by" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Found By Keyword</span></label>
+                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="contacted" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Contacted</span></label>
             </div>
             <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-3">
                 <button type="button" id="cancel-download-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Cancel</button>
@@ -206,10 +225,9 @@
     // --- Global State Variables ---
     const currentArtistId = {{ artist_id | tojson }};
     let allFoundPlaylists = []; // Master list of all playlists found in a search
-    let emailContentVariations = {}; // NEW: To store the AI-generated variations
+    let emailContentVariations = {};
 
     // --- Helper Function to get currently visible playlists ---
-    // This is the source of truth for the Contact and Download features.
     function getVisiblePlaylists() {
         const visiblePlaylistIds = new Set();
         document.querySelectorAll('.playlist-card').forEach(card => {
@@ -237,7 +255,13 @@
         const progressContainer = document.getElementById('progress-container');
         if (progressContainer) progressContainer.style.display = 'none';
         const findBtn = document.getElementById('find-playlists-button');
-        if (findBtn) { findBtn.disabled = false; findBtn.innerHTML = 'Find Playlists'; }
+        if (findBtn) { 
+            findBtn.disabled = false; 
+            const buttonText = findBtn.querySelector('.button-text');
+            const buttonLoading = findBtn.querySelector('.button-loading');
+            if (buttonText) buttonText.classList.remove('hidden');
+            if (buttonLoading) buttonLoading.classList.add('hidden');
+        }
     }
 
     function showSearchError(errorMessage) {
@@ -400,10 +424,9 @@
     }
 
     function generateEmailAction() {
-        // Get all necessary DOM elements
         const subjectEditorEl = document.getElementById('preview-subject-editor');
         const previewBodyEl = document.getElementById('preview-body');
-        const templateEditorEl = document.getElementById('template-body-editor'); // The editable textarea
+        const templateEditorEl = document.getElementById('template-body-editor');
         const descriptionEditor = document.getElementById('song-description-editor');
         const langSelector = document.getElementById('language-selector');
         const generateBtn = document.getElementById('generate-email-button');
@@ -415,7 +438,6 @@
         const buttonText = generateBtn.querySelector('.button-text');
         const language = langSelector.value;
 
-        // Validation (Unchanged)
         if (!selectedTrackInput) {
             alert('Please select a track first.');
             return;
@@ -434,7 +456,6 @@
             return;
         }
 
-        // Set UI to Loading State (Unchanged)
         generateBtn.disabled = true;
         loadingText.classList.remove('hidden');
         buttonText.classList.add('hidden');
@@ -442,7 +463,6 @@
         sendBtn.classList.add('hidden');
         sendBtn.disabled = true;
 
-        // Fetch AI-Generated Content
         fetch("{{ url_for('playlists.generate_preview_email_route') }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -456,16 +476,10 @@
         .then(response => response.ok ? response.json() : response.json().then(err => Promise.reject(err)))
         .then(data => {
             if (data.error) throw new Error(data.error);
-
-            // --- THE FIX IS HERE: Populate ALL fields from the response ---
             subjectEditorEl.value = data.subject || '';
             previewBodyEl.textContent = data.preview_body || '';
-            templateEditorEl.value = data.template_body || ''; // This populates the editable body
-            
-            // Store the structured variations object for the sending process
+            templateEditorEl.value = data.template_body || '';
             emailContentVariations = data.variations || {}; 
-            
-            // Show the preview and enable the send button
             previewEditSection.classList.remove('hidden');
             sendBtn.classList.remove('hidden');
             sendBtn.disabled = false;
@@ -477,13 +491,11 @@
             templateEditorEl.value = `An error occurred: ${error.message || 'Unknown error'}`;
         })
         .finally(() => {
-            // Reset the generate button's state
             generateBtn.disabled = false;
             loadingText.classList.add('hidden');
             buttonText.classList.remove('hidden');
         });
     }
-
 
     function updateLivePreview() {
         const template = document.getElementById('template-body-editor').value;
@@ -497,9 +509,7 @@
         document.getElementById('email-overlay').classList.add('hidden');
     }
 
-
     function confirmAndSendEmails() {
-        // --- 1. Get all required data from the UI and global state ---
         const emailLimitInput = document.getElementById('email-limit-input');
         const editedSubject = document.getElementById('preview-subject-editor').value.trim();
         const bccEmail = document.getElementById('bcc-email-input').value.trim();
@@ -508,7 +518,6 @@
         const contactButton = document.getElementById('contact-curators-button');
         const emailLog = document.getElementById('email-log');
 
-        // --- 2. Validation ---
         if (!trackIdInput) {
             alert("Error: A track is not selected. Please re-select a track.");
             return;
@@ -521,7 +530,7 @@
             emailLimitInput.focus();
             return;
         }
-        if (emailLimit > 300) emailLimit = 300; // Enforce max limit
+        if (emailLimit > 300) emailLimit = 300;
 
         if (!editedSubject || !editedTemplateBody) {
             alert("The subject and the template body cannot be empty.");
@@ -532,31 +541,26 @@
             return;
         }
 
-        // --- 3. Prepare Playlist Data ---
         const allContactablePlaylists = getVisiblePlaylists().filter(p => p && p.email && p.email.includes('@'));
         if (allContactablePlaylists.length === 0) {
             alert("There are no contactable playlists in the current view to send emails to.");
             return;
         }
 
-        // Apply the user-defined limit to the playlist array
         const isLimited = allContactablePlaylists.length > emailLimit;
         const playlistsToContact = allContactablePlaylists.slice(0, emailLimit);
 
-        // --- 4. User Confirmation ---
         const confirmationMessage = `You are about to send emails to ${playlistsToContact.length} currently visible contactable playlists.${isLimited ? ` (Limited from ${allContactablePlaylists.length} total)` : ''}\n\nContinue?`;
         if (!confirm(confirmationMessage)) {
             return;
         }
         
-        // --- 5. Set UI to Sending State ---
-        cancelEmailSend(); // Hide the modal
+        cancelEmailSend();
         contactButton.disabled = true;
         contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>';
         emailLog.textContent = `Initializing email process for ${playlistsToContact.length} playlists...\n`;
         document.getElementById('email-status-container').style.display = 'block';
 
-        // --- 6. Fetch the Event Stream to Send Emails ---
         fetch("{{ url_for('playlists.send_emails_route') }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
@@ -564,8 +568,8 @@
                 track_id: trackId,
                 playlists: playlistsToContact,
                 subject: editedSubject,
-                variations: emailContentVariations, // Send the raw variations for backend randomization
-                template_body: editedTemplateBody, // Send the user's final edited version
+                variations: emailContentVariations,
+                template_body: editedTemplateBody,
                 bcc_email: bccEmail
             })
         })
@@ -574,32 +578,27 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             
-            // Function to recursively process the stream
             function processStream({ done, value }) {
                 if (done) {
-                    // Reset the button once the stream is fully complete
                     contactButton.disabled = false;
                     contactButton.innerHTML = 'Contact Curators...';
                     return;
                 }
                 const chunk = decoder.decode(value, { stream: true });
                 
-                // SSE format can send multiple events in one chunk, separated by \n\n
                 const lines = chunk.split('\n\n');
                 lines.forEach(line => {
                     if (line.startsWith('data: ')) {
-                        // Append the actual data message to the log
                         emailLog.textContent += line.substring(6).trim() + '\n';
                     }
                 });
 
-                emailLog.scrollTop = emailLog.scrollHeight; // Auto-scroll to the bottom
-                reader.read().then(processStream); // Read the next chunk
+                emailLog.scrollTop = emailLog.scrollHeight;
+                reader.read().then(processStream);
             }
             reader.read().then(processStream);
         })
         .catch(error => {
-            // --- 7. Error Handling ---
             console.error("Error during email sending stream:", error);
             emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
             contactButton.disabled = false;
@@ -629,20 +628,25 @@
         
         const columnHeaders = {
             name: 'Playlist Name', url: 'Spotify URL', owner_name: 'Curator Name', email: 'Curator Email',
-            followers: 'Followers', tracks_total: 'Total Tracks', description: 'Description', found_by: 'Found By Keyword'
+            followers: 'Followers', tracks_total: 'Total Tracks', description: 'Description', 
+            found_by: 'Found By Keyword', contacted: 'Contacted'
         };
         
         const dataForExport = playlistsToDownload.map(pl => {
             let row = {};
             selectedColumns.forEach(colKey => {
                 let value = pl[colKey];
+                if (colKey === 'contacted') {
+                    value = pl.contacted || 0;
+                }
                 if (Array.isArray(value)) value = value.join(', ');
                 row[columnHeaders[colKey]] = value ?? '';
             });
             return row;
         });
 
-        const trackName = document.querySelector('input[name="selected_track_id"]:checked').parentElement.dataset.trackName || 'selected_track';
+        const trackNameInput = document.querySelector('input[name="selected_track_id"]:checked');
+        const trackName = trackNameInput ? trackNameInput.closest('.song-item-label').dataset.trackName : 'selected_track';
         const safeTrackName = trackName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const filename = `playlists_for_${safeTrackName}.${format}`;
 
@@ -655,7 +659,7 @@
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Playlists');
             const xlsxData = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheet.sheet' });
         }
         
         const link = document.createElement("a");
@@ -671,6 +675,7 @@
     }
 
     function convertToCSV(objArray) {
+        if (objArray.length === 0) return "";
         const headers = Object.keys(objArray[0]);
         const csvRows = [headers.join(',')];
         for (const row of objArray) {
@@ -684,6 +689,114 @@
             csvRows.push(values.join(','));
         }
         return csvRows.join('\r\n');
+    }
+
+    // --- Upload Logic ---
+    function setupUploadFeature() {
+        const fileInput = document.getElementById('playlist-upload-input');
+        const uploadStatus = document.getElementById('upload-status');
+        const uploadLabel = document.getElementById('upload-label-text');
+        
+        if (!fileInput) return;
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                uploadStatus.textContent = "Error: Please select an Excel file.";
+                uploadStatus.classList.add('text-red-400');
+                fileInput.value = '';
+                return;
+            }
+
+            uploadStatus.textContent = `Processing ${file.name}...`;
+            uploadStatus.classList.remove('text-red-400');
+            uploadLabel.parentElement.classList.add('opacity-50', 'pointer-events-none');
+            
+            const formData = new FormData();
+            formData.append('playlist_file', file);
+            
+            try {
+                const response = await fetch(`{{ url_for('playlists.upload_playlists', artist_id=artist_id) }}`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || `Server error: ${response.status}`);
+                
+                const selectedTrackName = "Playlists from Uploaded File";
+                document.title = `Playlist Results for ${selectedTrackName}`;
+                
+                const resultsHtml = `
+                    <hr class="border-gray-700 my-8">
+                    <h2 class="text-2xl font-bold mb-6 text-center">Playlist Results from "<span class="text-green-400">${selectedTrackName}</span>"</h2>
+                `;
+                const resultsContainer = document.getElementById('playlist-results-container');
+                resultsContainer.innerHTML = resultsHtml;
+
+                injectResultsAndData(
+                    await buildPlaylistsHtml(result.playlists),
+                    result.playlists
+                );
+                
+                uploadStatus.textContent = `Successfully loaded ${result.playlists.length} playlists.`;
+
+            } catch (error) {
+                console.error("Upload error:", error);
+                uploadStatus.textContent = `Error: ${error.message}`;
+                uploadStatus.classList.add('text-red-400');
+            } finally {
+                uploadLabel.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+                fileInput.value = '';
+            }
+        });
+    }
+
+    async function buildPlaylistsHtml(playlists) {
+        if (!playlists || playlists.length === 0) {
+            return `<div class="text-center p-6 bg-gray-700 rounded-lg shadow">
+                        <h3 class="text-xl font-semibold mb-2">No Playlists Loaded</h3>
+                        <p class="text-gray-400">The uploaded file contained no valid playlists to display after filtering.</p>
+                    </div>`;
+        }
+        const aiFilterHtml = `
+            <div class="mb-4 max-w-md mx-auto">
+                <label for="ai-smart-search" class="block text-sm font-semibold text-gray-300 mb-2 text-center">✨ AI Smart Filter</label>
+                <div class="flex gap-2">
+                    <input type="text" id="ai-smart-search" placeholder="e.g., chill indie pop with female vocals" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 text-white placeholder-gray-500">
+                    <button id="ai-filter-button" type="button" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait">
+                        <span class="button-text">Apply</span>
+                        <span class="button-loading hidden animate-spin">Applying...</span>
+                    </button>
+                </div>
+                <p id="ai-filter-status" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
+            </div>`;
+
+        const playlistCardsHtml = playlists.map(playlist => `
+            <div class="playlist-card bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600"
+                 data-playlist-id="${playlist.id}"
+                 data-found-by="${(playlist.found_by || []).map(k => k.toLowerCase()).join(',')}">
+                <div class="p-3 border-b border-gray-600">
+                     <a href="${playlist.url || '#'}" target="_blank" rel="noopener noreferrer" class="text-base font-semibold text-green-300 hover:text-green-200 hover:underline truncate block" title="${playlist.name || 'N/A'}">${playlist.name || 'N/A'}</a>
+                     <p class="text-xs text-gray-400 mt-1">By: <span class="text-gray-200">${playlist.owner_name || 'N/A'}</span></p>
+                </div>
+                <div class="p-3 flex flex-col flex-grow text-xs">
+                    ${playlist.description ? `<p class="text-gray-300 mb-2 line-clamp-2 text-xs" title="${playlist.description}">${playlist.description}</p>` : ''}
+                    <div class="mt-auto pt-2 space-y-1 border-t border-gray-600">
+                        <div class="flex justify-between"><span class="text-gray-400">Followers:</span><span class="font-medium text-gray-200">${playlist.followers || 'N/A'}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Tracks:</span><span class="font-medium text-gray-200">${playlist.tracks_total || 'N/A'}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Email:</span>${playlist.email ? `<a href="mailto:${playlist.email}" class="font-medium text-blue-400 hover:underline truncate" title="${playlist.email}">${playlist.email}</a>` : '<span class="font-medium text-gray-500 italic">N/A</span>'}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        return `${aiFilterHtml}
+                <p class="text-sm text-center text-gray-400 mb-4" id="playlist-count-display"></p>
+                <div id="playlists-grid" class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">${playlistCardsHtml}</div>
+                <p class="text-center text-xs text-gray-500 mt-4 italic">(Loaded ${playlists.length} playlists from file)</p>`;
     }
 
     // --- Main Entry Point: DOMContentLoaded ---
@@ -704,14 +817,33 @@
         });
         document.getElementById('cancel-download-button').addEventListener('click', hidePlaylistDownloadModal);
 
-        // Listener for the initial search form
+        // --- JS FIX: Listener for the initial search form ---
         const findForm = document.getElementById('playlist-finder-form');
-        findForm.addEventListener('submit', function(event) {
-            if (!findForm.querySelector('input[name="selected_track_id"]:checked')) {
-                alert("Please select a track before finding playlists.");
-                event.preventDefault();
-            }
-        });
+        const findButton = document.getElementById('find-playlists-button');
+        
+        if (findForm && findButton) {
+            findForm.addEventListener('submit', function(event) {
+                // 1. Validation
+                if (!findForm.querySelector('input[name="selected_track_id"]:checked')) {
+                    alert("Please select a track before finding playlists.");
+                    event.preventDefault(); // Stop the form submission
+                    return;
+                }
+                
+                // 2. Set loading state if validation passes
+                const buttonText = findButton.querySelector('.button-text');
+                const buttonLoading = findButton.querySelector('.button-loading');
+                
+                findButton.disabled = true;
+                if (buttonText) buttonText.classList.add('hidden');
+                if (buttonLoading) buttonLoading.classList.remove('hidden');
+                
+                // Allow the form to submit naturally to trigger the page stream
+            });
+        }
+        
+        // --- Initialize the upload feature ---
+        setupUploadFeature();
     });
 </script>
 {% endblock %}
@@ -727,4 +859,4 @@
     #email-preview-edit-section .grid > div > div:last-child > div { flex-grow: 1; }
 </style>
 {% endblock %}
-{# --- END OF FILE templates/playlist_finder_base.html --- #}
+{# --- END OF (CORRECTED & COMPLETE) FILE templates/playlist_finder_base.html --- #}

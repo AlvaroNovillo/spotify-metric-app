@@ -147,8 +147,8 @@ def similar_artists(artist_id):
 
     per_page = 24
     source_artist = None
+    pool_key = f"similar_artists_pool_{artist_id}"
 
-    # --- MODIFICATION: Data is fetched fresh on every request to prevent session-related crashes ---
     try:
         source_artist = sp.artist(artist_id)
         source_artist_name = source_artist.get('name', 'Selected Artist')
@@ -166,6 +166,10 @@ def similar_artists(artist_id):
         combined_pool = list(combined_artists_map.values())
         print(f" -> Total unique similar artist pool size: {len(combined_pool)}")
         
+        # --- FIX: Store the successfully fetched pool in the session ---
+        session[pool_key] = combined_pool
+        print(f"  -> Stored pool of {len(combined_pool)} artists in session key: {pool_key}")
+
         # Aggregate genres from the fresh pool
         total_pool_size = len(combined_pool)
         aggregated_genres = {}
@@ -218,24 +222,37 @@ def download_similar_artists(artist_id):
         return "Spotify API client could not be initialized.", 500
 
     try:
-        # --- MODIFICATION: Fetch data directly instead of relying on session ---
+        # --- FIX START: Retrieve the artist pool from the session first ---
+        pool_key = f"similar_artists_pool_{artist_id}"
+        combined_pool = session.get(pool_key)
+        
+        # We still need the source artist's name for the filename
         source_artist = sp.artist(artist_id)
         source_artist_name = source_artist.get('name', 'artist').replace(" ", "_")
-        source_artist_genres = source_artist.get('genres', [])
 
-        print(f"Fetching artist pool for download for '{source_artist_name}'...")
-        spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, source_artist_name, source_artist_genres)
-        lastfm_names = scrape_all_lastfm_similar_artists_names(source_artist_name, max_pages=5)
-        lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names or [])
+        # --- Fallback logic if the pool is not in the session ---
+        if combined_pool is None:
+            print(f"WARNING: Artist pool not found in session. Re-fetching for download for '{source_artist_name}'...")
+            source_artist_genres = source_artist.get('genres', [])
+            
+            # Use the real name for Last.fm, not the filename-safe version
+            real_source_name = source_artist.get('name', 'artist')
+            
+            spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, real_source_name, source_artist_genres)
+            lastfm_names = scrape_all_lastfm_similar_artists_names(real_source_name, max_pages=5)
+            lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names or [])
+            
+            combined_artists_map = {artist['id']: artist for artist in spotify_genre_artists if artist and artist.get('id') != artist_id}
+            for artist in lastfm_spotify_artists:
+                if artist and artist.get('id') != artist_id:
+                    combined_artists_map[artist['id']] = artist
+            combined_pool = list(combined_artists_map.values())
+            print(f" -> Re-fetched pool of {len(combined_pool)} unique artists for the download.")
+        else:
+            print(f"Found artist pool with {len(combined_pool)} artists in session for download.")
+        # --- FIX END ---
         
-        combined_artists_map = {artist['id']: artist for artist in spotify_genre_artists if artist and artist.get('id') != artist_id}
-        for artist in lastfm_spotify_artists:
-            if artist and artist.get('id') != artist_id:
-                combined_artists_map[artist['id']] = artist
-        combined_pool = list(combined_artists_map.values())
-        print(f" -> Found {len(combined_pool)} unique artists for the download pool.")
-        
-        # --- Filtering logic remains the same, but now operates on the fresh data ---
+        # --- Filtering logic remains the same, operating on `combined_pool` ---
         min_followers = request.args.get('min_followers', default=None, type=int)
         max_followers = request.args.get('max_followers', default=None, type=int)
         min_popularity = request.args.get('min_popularity', default=None, type=int)
@@ -277,7 +294,7 @@ def download_similar_artists(artist_id):
 
         if file_format == 'xlsx':
             output_df.to_excel(output, index=False, sheet_name='Similar Artists')
-            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheet.sheet'
         else:
             output_df.to_csv(output, index=False, encoding='utf-8')
             mimetype = 'text/csv'
