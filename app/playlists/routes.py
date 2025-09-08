@@ -1,4 +1,4 @@
-# --- START OF (IMPROVED KEYWORDS) FILE app/playlists/routes.py ---
+# --- START OF (MODIFIED) FILE app/playlists/routes.py ---
 import os
 import re
 import pandas as pd
@@ -23,7 +23,6 @@ import random
 
 from . import playlists_bp
 from ..spotify.auth import get_spotify_client_credentials_client
-# --- MODIFICATION: Import new functions ---
 from ..spotify.data import fetch_similar_artists_by_genre, fetch_release_details, fetch_spotify_details_for_names
 from ..spotify.utils import parse_follower_count
 from ..lastfm.scraper import scrape_lastfm_tags, scrape_all_lastfm_similar_artists_names
@@ -31,6 +30,7 @@ from .playlistsupply import login_to_playlistsupply, scrape_playlistsupply
 from .email import generate_email_template_and_preview, format_error_message, create_curator_outreach_html
 
 
+# --- (The first parts of the file, including playlist_finder, upload_playlists, etc., are unchanged) ...
 # --- fetch_all_artist_tracks function remains unchanged ---
 def fetch_all_artist_tracks(sp_client, artist_id):
     """
@@ -104,42 +104,36 @@ def playlist_finder(artist_id):
             selected_track_name = selected_track['name']; track_artist_name = selected_track['artists'][0]['name'] if selected_track['artists'] else artist_name
             js_safe_track_name = json.dumps(selected_track_name); yield f'<script>document.title = "Searching playlists for " + {js_safe_track_name} + "...";</script>\n'
             
-            # --- MODIFICATION START: Comprehensive Similar Artist and Genre Keyword Generation ---
             yield f'<script>updateProgress(10, "Finding similar artists...");</script>\n'
             print("[PlaylistFinder Stream] Building comprehensive similar artist pool for keywords...")
             
-            # 1. Get artists from Spotify genres and Last.fm
             spotify_genre_artists = fetch_similar_artists_by_genre(sp, artist_id, artist_name, artist_genres)
-            lastfm_names = scrape_all_lastfm_similar_artists_names(artist_name, max_pages=3) # Use fewer pages for speed
+            lastfm_names = scrape_all_lastfm_similar_artists_names(artist_name, max_pages=3)
             lastfm_spotify_artists = fetch_spotify_details_for_names(sp, lastfm_names or [])
             
-            # 2. Combine and de-duplicate the artist pool
             combined_artists_map = {artist['id']: artist for artist in spotify_genre_artists if artist and artist.get('id') != artist_id}
             for artist in lastfm_spotify_artists:
                 if artist and artist.get('id') != artist_id: combined_artists_map[artist['id']] = artist
             similar_artists_pool = list(combined_artists_map.values())
             print(f"[PlaylistFinder Stream]  -> Created a combined pool of {len(similar_artists_pool)} unique similar artists.")
 
-            # 3. Aggregate and find the most common genres from this new pool
             print("[PlaylistFinder Stream] Aggregating common genres from similar artists...")
             genre_counts = {}
             for artist in similar_artists_pool:
                 for genre in artist.get('genres', []):
                     genre_counts[genre] = genre_counts.get(genre, 0) + 1
             sorted_genres = sorted(genre_counts.items(), key=lambda item: item[1], reverse=True)
-            common_genres_from_pool = [genre for genre, count in sorted_genres[:10]] # Get top 10
+            common_genres_from_pool = [genre for genre, count in sorted_genres[:10]]
             print(f"[PlaylistFinder Stream]  -> Top 10 common genres found: {common_genres_from_pool}")
 
-            # 4. Build the final keyword set
             keywords = set()
             keywords.add(track_artist_name.lower()); keywords.add(artist_name.lower())
-            for genre in artist_genres[:5]: keywords.add(genre.lower().strip()) # Source artist's genres
-            for tag in lastfm_tags[:10]: keywords.add(tag.lower().strip()) # Last.fm tags
+            for genre in artist_genres[:5]: keywords.add(genre.lower().strip())
+            for tag in lastfm_tags[:10]: keywords.add(tag.lower().strip())
             user_kws = [kw.strip().lower() for kw in user_keywords_raw.split(',') if kw.strip()]
             for kw in user_kws: keywords.add(kw)
-            for sim_artist in similar_artists_pool: keywords.add(sim_artist["name"].lower()) # Similar artist names
-            for common_genre in common_genres_from_pool: keywords.add(common_genre.lower().strip()) # Common genres
-            # --- MODIFICATION END ---
+            for sim_artist in similar_artists_pool: keywords.add(sim_artist["name"].lower())
+            for common_genre in common_genres_from_pool: keywords.add(common_genre.lower().strip())
             
             keywords_list = sorted(list(filter(None, keywords)))
             if not keywords_list: raise ValueError("No valid keywords generated.")
@@ -191,7 +185,6 @@ def playlist_finder(artist_id):
     return Response(stream_with_context(generate_response()), mimetype='text/html')
 
 
-# --- NEW ROUTE: For handling Excel file uploads ---
 @playlists_bp.route('/playlist-finder/upload/<artist_id>', methods=['POST'])
 def upload_playlists(artist_id):
     if 'playlist_file' not in request.files:
@@ -205,38 +198,31 @@ def upload_playlists(artist_id):
     try:
         df = pd.read_excel(file)
         
-        # --- Define schema and mapping ---
         column_map = {
             'Playlist Name': 'name', 'Spotify URL': 'url', 'Curator Name': 'owner_name',
             'Curator Email': 'email', 'Followers': 'followers', 'Total Tracks': 'tracks_total',
             'Description': 'description', 'Found By Keyword': 'found_by', 'Contacted': 'contacted'
         }
         
-        # --- Validate required columns ---
         required_cols = ['Playlist Name', 'Spotify URL']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             return jsonify({"error": f"Missing required columns in Excel file: {', '.join(missing_cols)}"}), 400
 
-        # --- Filter out contacted playlists ---
         if 'Contacted' in df.columns:
-            # Ensure the 'Contacted' column is numeric, coercing errors to NaN, then fill NaN with 0
             df['Contacted'] = pd.to_numeric(df['Contacted'], errors='coerce').fillna(0)
             initial_count = len(df)
             df = df[df['Contacted'] != 1]
             print(f"[Upload] Filtered out {initial_count - len(df)} contacted playlists.")
 
-        # --- Convert DataFrame to list of dicts ---
         processed_playlists = []
         for _, row in df.iterrows():
             playlist_dict = {}
             for excel_col, dict_key in column_map.items():
                 if excel_col in row:
                     value = row[excel_col]
-                    # Handle pandas NaN values, which are not JSON serializable
                     playlist_dict[dict_key] = None if pd.isna(value) else value
             
-            # --- Extract Spotify ID (Crucial Step) ---
             spotify_id = None
             playlist_url = playlist_dict.get('url')
             if playlist_url and isinstance(playlist_url, str) and 'open.spotify.com/playlist/' in playlist_url:
@@ -246,11 +232,10 @@ def upload_playlists(artist_id):
             
             if not spotify_id:
                 print(f"[Upload] Skipping row with invalid Spotify URL: {playlist_url}")
-                continue # Skip playlists without a valid ID
+                continue
 
             playlist_dict['id'] = spotify_id
             
-            # Ensure 'found_by' is a list
             if 'found_by' in playlist_dict and isinstance(playlist_dict['found_by'], str):
                 playlist_dict['found_by'] = [kw.strip() for kw in playlist_dict['found_by'].split(',')]
             elif 'found_by' not in playlist_dict:
@@ -259,7 +244,6 @@ def upload_playlists(artist_id):
 
             processed_playlists.append(playlist_dict)
         
-        # Sort by followers, similar to the main search
         sorted_playlists = sorted(processed_playlists, key=lambda p: parse_follower_count(p.get('followers')) or 0, reverse=True)
 
         return jsonify({"playlists": sorted_playlists})
@@ -268,7 +252,6 @@ def upload_playlists(artist_id):
         print(f"Error processing uploaded playlist file: {e}")
         traceback.print_exc()
         return jsonify({"error": f"An unexpected error occurred while processing the file: {e}"}), 500
-
 
 
 @playlists_bp.route('/generate-preview-email', methods=['POST'])
@@ -290,8 +273,8 @@ def generate_preview_email_route():
          print(f"Error generating preview/template: {error_msg}"); return jsonify({"error": error_msg}), status_code
     except Exception as e:
         print(f"Unexpected error generating email preview/template: {e}"); error_msg = format_error_message(e, "Unexpected error generating preview/template."); return jsonify({"error": error_msg}), 500
-    
-    
+
+
 @playlists_bp.route('/send-emails', methods=['POST'])
 def send_emails_route():
     sp = get_spotify_client_credentials_client()
@@ -316,11 +299,9 @@ def send_emails_route():
     email_variations = data.get('variations') 
     bcc_email = data.get('bcc_email', '').strip()
 
-    # More robust validation: check for presence of keys, but allow playlists to be an empty list.
     if not all(k in data for k in ['subject', 'track_id', 'playlists', 'variations']):
         return Response("event: error\ndata: Missing required fields in request body\n\n", mimetype='text/event-stream', status=400)
     
-    # If there are no playlists, we don't need to do anything.
     if not playlists_to_contact:
         return Response("event: status\ndata: No playlists to contact.\nevent: done\ndata: Finished. Sent: 0, Errors: 0.\n\n", mimetype='text/event-stream')
     
@@ -371,13 +352,36 @@ def send_emails_route():
                     actual_curator_name = playlist.get('owner_name') or "Playlist Curator"
                     if actual_curator_name.lower() in ['n/a', 'spotify']: actual_curator_name = "Playlist Curator"
                 
+                    # --- CHANGE START: Assemble Plain Text Email with Link ---
+                    
+                    # 1. Choose random variations for each part of the email
                     greeting = random.choice(email_variations['greetings'])
-                    main_body = random.choice(email_variations['main_body'])
+                    main_body_variation = random.choice(email_variations['main_body'])
                     closing = random.choice(email_variations['closings'])
                     signature_line = random.choice(email_variations['signatures'])
-                    personalized_body = "\n\n".join([greeting, main_body, closing, signature_line, track_artist_name])
+
+                    # 2. Get the track URL and create a reliable call-to-action
+                    track_url = track.get('external_urls', {}).get('spotify', '#')
+                    call_to_action = f"You can listen to the track here: {track_url}"
+
+                    # 3. Assemble all parts into the final plain-text body
+                    # The link is now reliably inserted between the main body and the closing.
+                    personalized_body = "\n\n".join([
+                        greeting,
+                        main_body_variation,
+                        call_to_action,
+                        closing,
+                        signature_line,
+                        track_artist_name
+                    ])
+
+                    # 4. Personalize the placeholders
                     personalized_body = personalized_body.replace("{{curator_name}}", actual_curator_name).replace("{{playlist_name}}", playlist.get('name', 'this playlist'))
-                    html_body = create_curator_outreach_html(track, personalized_body)
+
+                    # 5. The HTML part is no longer created or attached
+                    # html_body = create_curator_outreach_html(track, personalized_body)
+                    
+                    # --- CHANGE END ---
                     
                     yield_message('status', f"-> Sending email to {curator_email}...")
                     msg = EmailMessage()
@@ -385,8 +389,13 @@ def send_emails_route():
                     msg['From'] =  f"FuzzTracks <{sender_email}>"
                     msg['To'] = curator_email
                     if bcc_email: msg['Bcc'] = bcc_email
+                    
+                    # This sets the plain text content. Since no HTML alternative is added,
+                    # the email will be sent as text/plain.
                     msg.set_content(personalized_body)
-                    msg.add_alternative(html_body, subtype='html')
+                    
+                    # This line is intentionally commented out to disable HTML emails.
+                    # msg.add_alternative(html_body, subtype='html')
 
                     server.send_message(msg)
                     yield_message('success', f"-> Email sent to {curator_email}.")
@@ -462,4 +471,4 @@ def filter_playlists_ai():
         print(f"[AI Filter V4] Error during AI-augmented filtering process: {e}"); traceback.print_exc(); return jsonify({"error": f"An unexpected error occurred during AI analysis: {e}"}), 500
     
 
-
+# --- END OF (MODIFIED) FILE app/playlists/routes.py ---
