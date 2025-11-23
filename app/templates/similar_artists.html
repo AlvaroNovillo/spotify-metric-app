@@ -1,307 +1,348 @@
-{# --- START OF (FULLY REVISED) FILE app/templates/similar_artists.html --- #}
+{# --- REVISED similar_artists.html --- #}
 {% extends 'base.html' %}
 
 {% block title %}Artists Similar to {{ source_artist_name }}{% endblock %}
 
 {% block content %}
-<h1 class="text-3xl font-bold mb-2 text-center">Artists Similar to {{ source_artist_name }}</h1>
-<p class="text-center text-gray-400 text-sm mb-6">(Combined from Spotify genres & Last.fm)</p>
-
-{# --- Filter & Download Section --- #}
-<div class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
-    <form method="GET" action="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" id="filter-form">
-        <h2 class="text-xl font-semibold mb-4 text-center text-gray-300">Filter Results</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-            <div>
-                <label for="min_followers" class="block text-sm font-medium text-gray-400 mb-1">Min Followers</label>
-                <input type="number" name="min_followers" id="min_followers" min="0" value="{{ request.args.get('min_followers', '') }}" placeholder="e.g., 10000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-            </div>
-            <div>
-                <label for="max_followers" class="block text-sm font-medium text-gray-400 mb-1">Max Followers</label>
-                <input type="number" name="max_followers" id="max_followers" min="0" value="{{ request.args.get('max_followers', '') }}" placeholder="e.g., 500000" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-            </div>
-            <div>
-                <label for="min_popularity" class="block text-sm font-medium text-gray-400 mb-1">Min Popularity</label>
-                <input type="number" name="min_popularity" id="min_popularity" min="0" max="100" value="{{ request.args.get('min_popularity', '') }}" placeholder="e.g., 40" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-            </div>
-            <div>
-                <label for="max_popularity" class="block text-sm font-medium text-gray-400 mb-1">Max Popularity</label>
-                <input type="number" name="max_popularity" id="max_popularity" min="0" max="100" value="{{ request.args.get('max_popularity', '') }}" placeholder="e.g., 85" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-            </div>
-        </div>
-        <div class="mt-5 text-center flex justify-center items-center gap-4">
-            <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Apply Filters</button>
-            <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" class="text-sm text-gray-400 hover:text-gray-200">Clear Filters</a>
-        </div>
-    </form>
-    
-    {# --- NEW Download Button --- #}
-    <div class="text-center mt-6 border-t border-gray-700 pt-5">
-        <button id="show-download-modal-btn" type="button" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">
-            Download Filtered Results...
-        </button>
+<div class="container fade-in">
+    <div class="text-center mb-8">
+        <h1>Artists Similar to <span style="color: var(--primary);">{{ source_artist_name }}</span></h1>
+        <p class="text-secondary mt-4">(Combined from Spotify genres & Last.fm)</p>
     </div>
-</div>
 
-{# --- NEW: Aggregated Genres Display Section --- #}
-{% if aggregated_genres %}
-<div class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
-    <h3 class="text-xl font-semibold mb-4 text-center text-gray-300">Common Genres Across Similar Artists</h3>
-    <p class="text-center text-xs text-gray-500 mb-5">(Top genres from the {{ total_pool_size }} artists found before filtering)</p>
-    <div class="flex flex-wrap justify-center items-center gap-3">
-        {# Display the top 20 most common genres #}
-        {% for genre_data in aggregated_genres[:20] %}
-            <div class="flex items-center bg-gray-700 text-gray-200 px-3 py-1 rounded-full text-sm shadow">
-                <span class="capitalize">{{ genre_data.display_name }}</span>
-                <span class="ml-2 text-xs bg-gray-600 text-gray-300 rounded-full px-2 py-0.5">{{ genre_data.count }}</span>
-            </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-{# --- END NEW SECTION --- #}
+    {# --- Filter Section --- #}
+    <div class="card mb-8">
+        <div class="section-header">
+            <span class="section-icon">🔍</span>
+            <h2 class="section-title">Filter Results</h2>
+        </div>
 
-
-{# --- Loading Indicator --- #}
-<div id="loading-indicator" class="text-center py-10">
-    <div class="loader inline-block border-4 border-gray-700 border-t-green-500 rounded-full w-12 h-12 animate-spin"></div>
-    <p class="text-gray-400 mt-3">Loading similar artists...</p>
-</div>
-
-
-{# --- Results Container (Initially Hidden) --- #}
-<div id="results-container" style="display: none;">
-
-    {# --- Display Artists --- #}
-    {% if artists %}
-    <p class="text-center text-sm text-gray-400 mb-4">Showing {{ artists|length }} of {{ total_artists }} artists. Page {{ current_page }} of {{ total_pages }}.</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {# Loop through artists_on_page (passed as 'artists') #}
-        {% for artist in artists %}
-        <a href="{{ url_for('main.search_artist', query=artist.name) }}"
-           class="block bg-gray-700 rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition duration-300 group border border-gray-600 hover:border-green-500">
-            <div class="flex flex-col h-full">
-                {# Image #}
-                {% if artist.images %}
-                    <img src="{{ artist.images[0].url }}" alt="{{ artist.name }}" class="w-full h-48 object-cover">
-                {% else %}
-                    <div class="w-full h-48 bg-gray-600 flex items-center justify-center"><span class="text-gray-500 text-sm">No Image</span></div>
-                {% endif %}
-                {# Details #}
-                <div class="p-4 flex flex-col flex-grow">
-                    <h3 class="text-lg font-semibold mb-1 truncate text-white group-hover:text-green-400 transition duration-300" title="{{ artist.name }}">{{ artist.name }}</h3>
-                    <span class="text-blue-400 group-hover:text-blue-300 text-xs mb-3 inline-block transition duration-300">View Details →</span> {# Links to our app's search #}
-                    <div class="text-xs text-gray-300 mb-1">Followers: <span class="font-medium text-gray-100">{% if artist.followers and artist.followers.total is not none %}{{ "{:,}".format(artist.followers.total) }}{% else %}N/A{% endif %}</span></div>
-                    <div class="text-xs text-gray-300">Popularity: <span class="font-medium text-gray-100">{% if artist.popularity is not none %}{{ artist.popularity }} / 100{% else %}N/A{% endif %}</span></div>
-                    {% if artist.popularity is not none %}<div class="w-full bg-gray-600 rounded-full h-1 mt-1 mb-3"><div class="bg-green-500 h-1 rounded-full" style="width: {{ artist.popularity }}%"></div></div>
-                    {% else %}<div class="w-full bg-gray-600 rounded-full h-1 mt-1 mb-3"><div class="bg-gray-500 h-1 rounded-full" style="width: 0%"></div></div>{% endif %}
-
-                    {# Spotify Genres #}
-                    {% if artist.genres %}
-                        <div class="mt-auto pt-2 border-t border-gray-600"><p class="text-xs text-gray-500 uppercase mb-1">Genres (Spotify)</p><div class="flex flex-wrap gap-1">
-                            {% for genre in artist.genres[:5] %} {# Limit displayed genres #}
-                                <span class="bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full text-xs">{{ genre }}</span>
-                            {% endfor %}
-                            {% if artist.genres|length > 5 %}<span class="text-gray-500 text-xs ml-1">...</span>{% endif %}
-                        </div></div>
-                    {% endif %}
-
-                    {# REMOVED Last.fm Tags Section #}
-
+        <form method="GET" action="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}" id="filter-form">
+            <div class="grid-auto mb-6">
+                <div class="form-group">
+                    <label for="min_followers" class="form-label">Min Followers</label>
+                    <input type="number" name="min_followers" id="min_followers" min="0"
+                        value="{{ request.args.get('min_followers', '') }}" placeholder="e.g., 10000"
+                        class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="max_followers" class="form-label">Max Followers</label>
+                    <input type="number" name="max_followers" id="max_followers" min="0"
+                        value="{{ request.args.get('max_followers', '') }}" placeholder="e.g., 500000"
+                        class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="min_popularity" class="form-label">Min Popularity</label>
+                    <input type="number" name="min_popularity" id="min_popularity" min="0" max="100"
+                        value="{{ request.args.get('min_popularity', '') }}" placeholder="e.g., 40" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="max_popularity" class="form-label">Max Popularity</label>
+                    <input type="number" name="max_popularity" id="max_popularity" min="0" max="100"
+                        value="{{ request.args.get('max_popularity', '') }}" placeholder="e.g., 85" class="form-input">
                 </div>
             </div>
-        </a>
-        {% endfor %} {# Closes the artist loop #}
-    </div>
 
-    {# --- Pagination Controls --- #}
-    {% if total_pages > 1 %}
-       <nav aria-label="Pagination" class="mt-10 flex justify-center">
-        <ul class="inline-flex items-center -space-x-px">
-            {# Helper to remove 'page' from args #}
-            {% set base_args = request.args.to_dict() %}
-            {% set _ = base_args.pop('page', None) %}
-
-            {# Previous Button #}
-            <li>
-                {% if current_page > 1 %}
-                    <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page-1, **base_args) }}"
-                       class="py-2 px-3 ml-0 leading-tight text-gray-400 bg-gray-800 rounded-l-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
-                        <span class="sr-only">Previous</span>
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                    </a>
-                {% else %}
-                    <span class="py-2 px-3 ml-0 leading-tight text-gray-500 bg-gray-800 rounded-l-lg border border-gray-700 cursor-not-allowed">
-                        <span class="sr-only">Previous</span>
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                    </span>
-                {% endif %}
-            </li>
-
-            {# Page Numbers #}
-            {% set page_window = 2 %} {# Show 2 pages before and after current #}
-            {% for p in range(1, total_pages + 1) %}
-                {% if p == 1 or p == total_pages or (p >= current_page - page_window and p <= current_page + page_window) %}
-                <li>
-                    {% if p == current_page %}
-                    <span aria-current="page" class="z-10 py-2 px-3 leading-tight text-green-400 bg-gray-700 border border-gray-600 cursor-default">{{ p }}</span>
-                    {% else %}
-                    <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=p, **base_args) }}"
-                       class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 border border-gray-700 hover:bg-gray-700 hover:text-white">{{ p }}</a>
-                    {% endif %}
-                </li>
-                {% elif p == current_page - page_window - 1 or p == current_page + page_window + 1 %}
-                 <li>
-                     <span class="py-2 px-3 leading-tight text-gray-500 bg-gray-800 border border-gray-700">...</span>
-                 </li>
-                {% endif %}
-            {% endfor %}
-
-
-            {# Next Button #}
-            <li>
-                 {% if current_page < total_pages %}
-                    <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page+1, **base_args) }}"
-                       class="py-2 px-3 leading-tight text-gray-400 bg-gray-800 rounded-r-lg border border-gray-700 hover:bg-gray-700 hover:text-white">
-                        <span class="sr-only">Next</span>
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg>
-                    </a>
-                {% else %}
-                    <span class="py-2 px-3 leading-tight text-gray-500 bg-gray-800 rounded-r-lg border border-gray-700 cursor-not-allowed">
-                        <span class="sr-only">Next</span>
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg>
-                    </span>
-                {% endif %}
-            </li>
-        </ul>
-       </nav>
-    {% endif %}
-    {# End Pagination #}
-
-    {% else %}
-        {# Fallback message if no artists found AT ALL (after potential filtering) #}
-        <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
-             <h2 class="text-2xl font-semibold mb-4">{% if request.args.get('min_followers') or request.args.get('max_followers') or request.args.get('min_popularity') or request.args.get('max_popularity') %}No Similar Artists Found Matching Filters{% else %}Could Not Find Similar Artists{% endif %}</h2>
-             <p class="text-gray-400">{% if request.args.get('min_followers') or request.args.get('max_followers') or request.args.get('min_popularity') or request.args.get('max_popularity') %}No artists related to {{ source_artist_name }} match your filter criteria. Try clearing filters.{% else %}We couldn't find any similar artists for {{ source_artist_name }} using available methods.{% endif %}</p>
-        </div>
-    {% endif %}
-
-</div> {# End results-container #}
-
-
-{# Link back #}
-<div class="text-center mt-10">
-    <a href="{{ url_for('main.search_artist', query=source_artist_name) }}" class="inline-block px-6 py-2 bg-gray-600 rounded text-lg font-semibold hover:bg-gray-500 transition duration-300">
-        ← Back to {{ source_artist_name }}
-    </a>
-</div>
-
-
-{# --- NEW: Download Options Modal (Initially Hidden) --- #}
-<div id="download-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-600">
-        <h3 class="text-xl font-bold mb-4 text-center">Download Options</h3>
-        <p class="text-sm text-gray-400 text-center mb-6">Select the data columns you want to include in your export file.</p>
-        
-        <form id="download-options-form">
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Artist Name</span>
-                </label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="followers" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Followers</span>
-                </label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="popularity" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Popularity</span>
-                </label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="genres" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Genres</span>
-                </label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="url" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Spotify URL</span>
-                </label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer">
-                    <input type="checkbox" name="columns" value="image_url" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500">
-                    <span class="ml-3 text-gray-200">Image URL</span>
-                </label>
-            </div>
-
-            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-3">
-                <button id="cancel-download-btn" type="button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Cancel</button>
-                <button data-format="csv" class="download-btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Export as CSV</button>
-                <button data-format="xlsx" class="download-btn px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">Export as XLSX</button>
+            <div class="flex justify-center items-center gap-4 mb-6">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id) }}"
+                    class="text-secondary hover:text-main" style="font-size: 0.9rem;">Clear Filters</a>
             </div>
         </form>
+
+        <div class="divider"></div>
+
+        <div class="text-center mt-6">
+            <button id="show-download-modal-btn" type="button" class="btn"
+                style="background-color: var(--success); color: white;">
+                Download Filtered Results
+            </button>
+        </div>
+    </div>
+
+    {# --- Common Genres Section --- #}
+    {% if aggregated_genres %}
+    <div class="card mb-8">
+        <div class="section-header">
+            <span class="section-icon">🎵</span>
+            <h2 class="section-title">Common Genres</h2>
+        </div>
+        <p class="text-center text-muted mb-6" style="font-size: 0.85rem;">
+            Top genres from {{ total_pool_size }} artists found before filtering
+        </p>
+        <div class="flex flex-wrap justify-center gap-2">
+            {% for genre_data in aggregated_genres[:20] %}
+            <span class="badge"
+                style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: var(--text-main); padding: 0.5rem 1rem; font-size: 0.9rem; display: inline-flex; align-items: center;">
+                {{ genre_data.display_name }}
+                <span class="badge"
+                    style="background: var(--primary); color: white; margin-left: 0.5rem; font-size: 0.8rem; padding: 0.2rem 0.5rem;">{{
+                    genre_data.count }}</span>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- Results Container --- #}
+    <div id="results-container">
+        {% if artists %}
+        <div class="mb-8 text-center">
+            <p class="text-secondary">
+                Showing <span class="badge badge-primary">{{ artists|length }}</span> of
+                <span class="badge badge-info">{{ total_artists }}</span> artists
+                • Page {{ current_page }} of {{ total_pages }}
+            </p>
+        </div>
+
+        {# --- Artist Grid --- #}
+        <div class="grid-auto mb-8">
+            {% for artist in artists %}
+            <a href="{{ url_for('main.search_artist', query=artist.name) }}" class="card"
+                style="padding: 0; text-decoration: none; color: inherit;">
+                {# Image #}
+                {% if artist.images %}
+                <img src="{{ artist.images[0].url }}" alt="{{ artist.name }}"
+                    style="width: 100%; height: 200px; object-fit: cover; border-radius: var(--radius-xl) var(--radius-xl) 0 0;">
+                {% else %}
+                <div
+                    style="width: 100%; height: 200px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xl) var(--radius-xl) 0 0;">
+                    <span class="text-muted">No Image</span>
+                </div>
+                {% endif %}
+
+                {# Details #}
+                <div style="padding: var(--spacing-lg);">
+                    <h3 class="font-bold mb-4" style="font-size: 1.1rem; color: var(--text-main);"
+                        title="{{ artist.name }}">{{ artist.name }}</h3>
+
+                    <div class="info-card mb-4">
+                        <div class="flex justify-between mb-3">
+                            <span style="font-size: 0.85rem; color: var(--text-secondary);">Followers</span>
+                            <span class="font-semibold" style="font-size: 0.95rem; color: var(--text-main);">
+                                {% if artist.followers and artist.followers.total is not none %}
+                                {{ "{:,}".format(artist.followers.total) }}
+                                {% else %}N/A{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span style="font-size: 0.85rem; color: var(--text-secondary);">Popularity</span>
+                            <span class="font-semibold" style="font-size: 0.95rem; color: var(--text-main);">
+                                {% if artist.popularity is not none %}{{ artist.popularity }}/100{% else %}N/A{% endif
+                                %}
+                            </span>
+                        </div>
+                        {% if artist.popularity is not none %}
+                        <div class="progress-bar-wrapper mt-3">
+                            <div class="progress-bar" style="width: {{ artist.popularity }}%; min-width: 2px;"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {# Genres #}
+                    {% if artist.genres %}
+                    <div class="mt-4 pt-4" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p class="mb-3"
+                            style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">
+                            Genres</p>
+                        <div class="flex flex-wrap gap-2">
+                            {% for genre in artist.genres[:7] %}
+                            <span class="badge"
+                                style="font-size: 0.8rem; padding: 0.4rem 0.8rem; color: white; background: var(--primary-dark); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 2px 4px rgba(0,0,0,0.2);">{{
+                                genre }}</span>
+                            {% endfor %}
+                            {% if artist.genres|length > 7 %}
+                            <span class="badge"
+                                style="font-size: 0.75rem; padding: 0.4rem 0.8rem; background: rgba(255,255,255,0.1); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.05);">+{{
+                                artist.genres|length - 7 }} more</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        {# --- Pagination --- #}
+        {% if total_pages > 1 %}
+        <nav class="flex justify-center mt-8">
+            <div class="flex items-center gap-2">
+                {% set base_args = request.args.to_dict() %}
+                {% set _ = base_args.pop('page', None) %}
+
+                {# Previous #}
+                {% if current_page > 1 %}
+                <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page-1, **base_args) }}"
+                    class="btn btn-secondary">← Prev</a>
+                {% else %}
+                <span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">← Prev</span>
+                {% endif %}
+
+                {# Page numbers #}
+                {% set page_window = 2 %}
+                {% for p in range(1, total_pages + 1) %}
+                {% if p == 1 or p == total_pages or (p >= current_page - page_window and p <= current_page +
+                    page_window) %} {% if p==current_page %} <span class="btn btn-primary">{{ p }}</span>
+                    {% else %}
+                    <a href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=p, **base_args) }}"
+                        class="btn btn-secondary">{{ p }}</a>
+                    {% endif %}
+                    {% elif p == current_page - page_window - 1 or p == current_page + page_window + 1 %}
+                    <span class="text-muted">...</span>
+                    {% endif %}
+                    {% endfor %}
+
+                    {# Next #}
+                    {% if current_page < total_pages %} <a
+                        href="{{ url_for('main.similar_artists', artist_id=source_artist_id, page=current_page+1, **base_args) }}"
+                        class="btn btn-secondary">Next →</a>
+                        {% else %}
+                        <span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Next →</span>
+                        {% endif %}
+            </div>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="card text-center">
+            <h2 class="mb-4">
+                {% if request.args.get('min_followers') or request.args.get('max_followers') or
+                request.args.get('min_popularity') or request.args.get('max_popularity') %}
+                No Similar Artists Found Matching Filters
+                {% else %}
+                Could Not Find Similar Artists
+                {% endif %}
+            </h2>
+            <p class="text-secondary">
+                {% if request.args.get('min_followers') or request.args.get('max_followers') or
+                request.args.get('min_popularity') or request.args.get('max_popularity') %}
+                No artists related to {{ source_artist_name }} match your filter criteria. Try clearing filters.
+                {% else %}
+                We couldn't find any similar artists for {{ source_artist_name }} using available methods.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Back Link #}
+    <div class="text-center mt-8">
+        <a href="{{ url_for('main.search_artist', query=source_artist_name) }}" class="btn btn-secondary">
+            ← Back to {{ source_artist_name }}
+        </a>
+    </div>
+</div>
+
+{# --- Download Modal --- #}
+<div id="download-modal" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3 class="text-center" style="font-size: 1.5rem; margin: 0;">Download Options</h3>
+        </div>
+
+        <div class="modal-body">
+            <p class="text-center text-secondary mb-4">Select the data columns to include in your export.</p>
+
+            <form id="download-options-form">
+                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="name" checked class="hidden">
+                        <span>Artist Name</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="followers" checked class="hidden">
+                        <span>Followers</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="popularity" checked class="hidden">
+                        <span>Popularity</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="genres" class="hidden">
+                        <span>Genres</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="url" class="hidden">
+                        <span>Spotify URL</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                    <label class="song-item-label">
+                        <input type="checkbox" name="columns" value="image_url" class="hidden">
+                        <span>Image URL</span>
+                        <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                    </label>
+                </div>
+            </form>
+        </div>
+
+        <div class="modal-footer">
+            <button id="cancel-download-btn" type="button" class="btn btn-secondary">Cancel</button>
+            <button data-format="csv" class="download-btn btn btn-primary">Export CSV</button>
+            <button data-format="xlsx" class="download-btn btn"
+                style="background-color: var(--success); color: white;">Export XLSX</button>
+        </div>
     </div>
 </div>
 {% endblock %}
 
-{# JavaScript for loading indicator #}
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // --- Existing loader logic ---
-        const loader = document.getElementById('loading-indicator');
-        const results = document.getElementById('results-container');
-        if (loader) loader.style.display = 'none';
-        if (results) results.style.display = 'block';
-
-        // --- NEW Download Modal Logic ---
+    document.addEventListener('DOMContentLoaded', function () {
+        // Download Modal Logic
         const showModalBtn = document.getElementById('show-download-modal-btn');
         const modal = document.getElementById('download-modal');
         const cancelBtn = document.getElementById('cancel-download-btn');
         const downloadButtons = document.querySelectorAll('.download-btn');
 
-        // Function to show the modal
         if (showModalBtn) {
             showModalBtn.addEventListener('click', () => {
                 if (modal) modal.classList.remove('hidden');
             });
         }
 
-        // Function to hide the modal
         const hideModal = () => {
             if (modal) modal.classList.add('hidden');
-        }
+        };
+
         if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
 
-        // Function to handle the download click
+        // Close modal on overlay click
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) hideModal();
+            });
+        }
+
         downloadButtons.forEach(button => {
             button.addEventListener('click', (event) => {
                 event.preventDefault();
 
-                // 1. Get selected columns
                 const selectedColumns = Array.from(document.querySelectorAll('#download-options-form input[name="columns"]:checked'))
-                                             .map(cb => cb.value);
-                
+                    .map(cb => cb.value);
+
                 if (selectedColumns.length === 0) {
                     alert('Please select at least one column to export.');
                     return;
                 }
 
-                // 2. Get current filter values from the main filter form
                 const filterForm = document.getElementById('filter-form');
                 const formData = new FormData(filterForm);
                 const params = new URLSearchParams(formData);
 
-                // 3. Add columns and format to the parameters
                 params.append('columns', selectedColumns.join(','));
                 params.append('format', event.target.dataset.format);
-                
-                // 4. Construct the download URL and initiate download
+
                 const downloadUrl = `{{ url_for('main.download_similar_artists', artist_id=source_artist_id) }}?${params.toString()}`;
                 window.location.href = downloadUrl;
 
-                // 5. Hide the modal
                 hideModal();
             });
         });
     });
 </script>
 {% endblock %}
-{# --- END OF (FULLY REVISED) FILE app/templates/similar_artists.html --- #}

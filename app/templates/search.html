@@ -2,53 +2,59 @@
 {% extends 'base.html' %}
 
 {% block title %}
-    {% if main_artist %}
-        {{ main_artist.name }} - Artist Metrics
-    {% else %}
-        Search Artist - Spotify Metrics
-    {% endif %}
+{% if main_artist %}
+{{ main_artist.name }} - Artist Metrics
+{% else %}
+Search Artist - Spotify Metrics
+{% endif %}
 {% endblock %}
 
 {% block content %}
-<h1 class="text-3xl font-bold mb-6 text-center">Search for an Artist</h1>
+<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--spacing-lg);">
+    <h1 class="text-center" style="margin-bottom: 2rem;">Search for an Artist</h1>
 
-{# Search Form (with loading) #}
-<div class="mb-8 max-w-xl mx-auto">
-    <form method="GET" action="{{ url_for('main.search_artist') }}" id="artist-search-form" class="relative">
-        <div class="flex items-center bg-gray-800 rounded-full shadow-md overflow-hidden">
-            <input type="text" name="query" id="artist-query-input" placeholder="Enter artist name..." value="{{ query or '' }}" required class="w-full px-6 py-3 bg-transparent text-white focus:outline-none peer">
-            <button type="submit" id="artist-search-button" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold transition duration-300 disabled:opacity-70 disabled:cursor-wait">
-                <span class="button-text">Search</span>
-                <span class="button-loading hidden animate-pulse">Searching...</span>
-            </button>
-        </div>
-        <div id="search-loading-indicator" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden">
-             <div class="loader inline-block border-2 border-gray-500 border-t-green-400 rounded-full w-6 h-6 animate-spin"></div>
-        </div>
-    </form>
-     <p id="search-status-text" class="text-center text-xs text-gray-500 mt-2 h-4"></p>
-</div>
+    {# Search Form #}
+    <div class="card" style="margin-bottom: 2rem; padding: 1.5rem;">
+        <form method="GET" action="{{ url_for('main.search_artist') }}" id="artist-search-form"
+            style="position: relative;">
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="text" name="query" id="artist-query-input" placeholder="Enter artist name..."
+                    value="{{ query or '' }}" required class="form-input" style="flex-grow: 1;">
+                <button type="submit" id="artist-search-button" class="btn btn-primary">
+                    <span class="button-text">Search</span>
+                    <span class="button-loading hidden animate-spin">Searching...</span>
+                </button>
+            </div>
+            <div id="search-loading-indicator" class="hidden"
+                style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);">
+                <!-- Loader handled by button state mostly, but keeping structure if needed -->
+            </div>
+        </form>
+        <p id="search-status-text"
+            style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; min-height: 1rem;">
+        </p>
+    </div>
 
-{# Display Search Results #}
-{% if search_performed %}
+    {# Display Search Results #}
+    {% if search_performed %}
     {% if main_artist %}
-        {# Artist Found - Display Details using Partial #}
-        <h2 class="text-2xl font-bold mb-4 text-center text-green-300">Search Result: {{ main_artist.name }}</h2>
+    {# Artist Found #}
+    <div class="card fade-in">
+        <h2 class="text-center" style="margin-bottom: 1.5rem; color: var(--primary);">Search Result: {{ main_artist.name
+            }}</h2>
 
-        {# Links to related pages #}
-        <div class="text-center mb-8 flex flex-wrap justify-center gap-4">
-             <a href="{{ url_for('main.similar_artists', artist_id=main_artist.id) }}"
-                id="view-similar-button"
-                class="inline-block px-6 py-2 bg-blue-500 rounded text-lg font-semibold hover:bg-blue-600 transition duration-300 relative disabled:opacity-70 disabled:cursor-wait">
-                 <span class="button-text">View Similar Artists</span>
-                 <span class="button-loading hidden animate-pulse">Loading...</span>
-             </a>
-             <a href="{{ url_for('playlists.show_playlist_finder', artist_id=main_artist.id) }}"
-                id="find-playlists-button"
-                class="inline-block px-6 py-2 bg-purple-600 rounded text-lg font-semibold hover:bg-purple-700 transition duration-300 relative disabled:opacity-70 disabled:cursor-wait">
-                 <span class="button-text">Find Playlists for Artist</span>
-                 <span class="button-loading hidden animate-pulse">Loading...</span>
-             </a>
+        {# Links #}
+        <div class="flex justify-center gap-4" style="margin-bottom: 2rem; flex-wrap: wrap;">
+            <a href="{{ url_for('main.similar_artists', artist_id=main_artist.id) }}" id="view-similar-button"
+                class="btn btn-secondary">
+                <span class="button-text">View Similar Artists</span>
+                <span class="button-loading hidden animate-spin">Loading...</span>
+            </a>
+            <a href="{{ url_for('playlists.show_playlist_finder', artist_id=main_artist.id) }}"
+                id="find-playlists-button" class="btn" style="background-color: var(--accent-purple); color: white;">
+                <span class="button-text">Find Playlists for Artist</span>
+                <span class="button-loading hidden animate-spin">Loading...</span>
+            </a>
         </div>
 
         {# Include the Spotify artist details partial #}
@@ -58,93 +64,93 @@
         {% set release_stats = release_stats %}
         {% include '_artist_display.html' %}
 
-        {# --- ****** NEW: Last.fm Events Section ****** --- #}
-        <div class="bg-gray-800 rounded-lg shadow-xl p-6 mt-[-1rem] mb-10"> {# Negative margin to pull up slightly #}
-            <h4 class="text-xl font-semibold mb-4 text-center text-red-400">Upcoming Events (from Last.fm)</h4>
+        {# Last.fm Events #}
+        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
+            <h4 style="font-size: 1.25rem; margin-bottom: 1rem; text-align: center; color: #fca5a5;">Upcoming Events
+                (Last.fm)</h4>
             {% if lastfm_events %}
-                <ul class="space-y-4">
-                    {% for event in lastfm_events %}
-                        <li class="flex flex-col sm:flex-row items-start sm:items-center border-b border-gray-700 pb-3 last:border-b-0">
-                            {# Date Section #}
-                            <div class="w-full sm:w-24 text-center sm:text-left mb-2 sm:mb-0 sm:mr-4 flex-shrink-0">
-                                <p class="text-lg font-semibold text-gray-200 leading-tight">{{ event.date.split(' ')[1] or '?' }}</p> {# Day #}
-                                <p class="text-xs uppercase text-gray-400">{{ event.date.split(' ')[0] or 'Date' }}{% if event.date.split(' ')|length > 2 %}, {{ event.date.split(' ')[2] }}{% endif %}</p> {# Month/Year #}
-                            </div>
-                            {# Details Section #}
-                            <div class="flex-grow">
-                                {% if event.url %}
-                                <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer" class="text-green-400 hover:text-green-300 font-semibold block hover:underline" title="{{ event.title }}">
-                                    {{ event.title }} ↗
-                                </a>
-                                {% else %}
-                                <p class="text-gray-100 font-semibold block">{{ event.title }}</p>
-                                {% endif %}
-                                <p class="text-sm text-gray-300 mt-1">{{ event.venue | default('Venue not specified') }}</p>
-                                <p class="text-xs text-gray-500">{{ event.location | default('Location not specified') }}</p>
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ul>
-             {% elif lastfm_events is not none %} {# Check for empty list vs scrape error #}
-                <p class="text-center text-gray-500 italic">No upcoming events found for {{ main_artist.name }} on Last.fm.</p>
-             {% else %} {# lastfm_events is None - indicating scrape error handled in route #}
-                  <p class="text-center text-yellow-500 italic">Could not load event data from Last.fm.</p>
-             {% endif %}
-              <p class="text-xs text-gray-600 mt-4 text-center">Event data scraped from Last.fm. Accuracy not guaranteed.</p>
+            <ul style="display: flex; flex-direction: column; gap: 1rem;">
+                {% for event in lastfm_events %}
+                <li
+                    style="display: flex; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <div style="min-width: 80px; text-align: center;">
+                        <p style="font-weight: 700; font-size: 1.1rem;">{{ event.date.split(' ')[1] or '?' }}</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">{{
+                            event.date.split(' ')[0] or 'Date' }}</p>
+                    </div>
+                    <div>
+                        {% if event.url %}
+                        <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer"
+                            style="font-weight: 600; color: var(--primary);">
+                            {{ event.title }} ↗
+                        </a>
+                        {% else %}
+                        <p style="font-weight: 600;">{{ event.title }}</p>
+                        {% endif %}
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">{{ event.venue | default('Venue not
+                            specified') }}</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">{{ event.location | default('Location
+                            not specified') }}</p>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% elif lastfm_events is not none %}
+            <p style="text-align: center; color: var(--text-muted); font-style: italic;">No upcoming events found.</p>
+            {% else %}
+            <p style="text-align: center; color: var(--warning);">Could not load event data.</p>
+            {% endif %}
+            <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">Event data
+                scraped from Last.fm.</p>
         </div>
-        {# --- ****** End Last.fm Events Section ****** --- #}
+    </div>
 
     {% else %}
-        {# No artist found message #}
-        <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
-            <h2 class="text-2xl font-semibold mb-4">No Artist Found</h2>
-            {% if query %}
-                <p class="text-gray-400">Could not find any artist matching "{{ query }}". Please try a different search term.</p>
-            {% else %}
-                 <p class="text-gray-400">Could not retrieve details for the previously searched artist.</p>
-            {% endif %}
-        </div>
+    {# No artist found #}
+    <div class="card text-center">
+        <h2 style="margin-bottom: 1rem;">No Artist Found</h2>
+        {% if query %}
+        <p style="color: var(--text-muted);">Could not find any artist matching "{{ query }}".</p>
+        {% else %}
+        <p style="color: var(--text-muted);">Could not retrieve details.</p>
+        {% endif %}
+    </div>
     {% endif %}
-{% else %}
-   {# Initial state #}
-   <div class="text-center p-10 bg-gray-800 rounded-lg shadow-xl">
-       <p class="text-gray-400">Enter an artist name above to view their metrics. The last searched artist will be shown if you return to this page.</p>
-   </div>
-{% endif %} {# end search_performed #}
-
+    {% else %}
+    {# Initial state #}
+    <div class="card text-center">
+        <p style="color: var(--text-muted);">Enter an artist name above to view their metrics.</p>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}
 
-{# (Keep extra_js block from previous step for search/nav loading) #}
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         // --- Search Form Logic ---
         const searchForm = document.getElementById('artist-search-form');
         const searchButton = document.getElementById('artist-search-button');
         const queryInput = document.getElementById('artist-query-input');
-        const searchLoadingIndicator = document.getElementById('search-loading-indicator');
         const searchStatusText = document.getElementById('search-status-text');
         const searchButtonTextSpan = searchButton ? searchButton.querySelector('.button-text') : null;
         const searchButtonLoadingSpan = searchButton ? searchButton.querySelector('.button-loading') : null;
 
-        if (searchForm && searchButton && queryInput && searchLoadingIndicator && searchButtonTextSpan && searchButtonLoadingSpan && searchStatusText) {
-            searchForm.addEventListener('submit', function(event) {
+        if (searchForm && searchButton && queryInput && searchButtonTextSpan && searchButtonLoadingSpan && searchStatusText) {
+            searchForm.addEventListener('submit', function (event) {
                 if (!queryInput.value.trim()) {
                     searchStatusText.textContent = 'Please enter an artist name.';
-                    searchStatusText.classList.add('text-red-400');
+                    searchStatusText.style.color = 'var(--error)';
                     event.preventDefault();
                     return;
                 }
                 searchButton.disabled = true;
                 searchButtonTextSpan.classList.add('hidden');
                 searchButtonLoadingSpan.classList.remove('hidden');
-                searchLoadingIndicator.classList.remove('hidden');
-                queryInput.classList.add('opacity-50');
+                queryInput.style.opacity = '0.5';
                 searchStatusText.textContent = 'Searching...';
-                searchStatusText.classList.remove('text-red-400');
+                searchStatusText.style.color = 'var(--text-main)';
             });
-        } else {
-            console.error("Search form elements not found for loading indicator setup.");
         }
 
         // --- Navigation Button Logic ---
@@ -154,34 +160,29 @@
             const buttonLoadingSpan = navButton ? navButton.querySelector('.button-loading') : null;
 
             if (navButton && buttonTextSpan && buttonLoadingSpan) {
-                navButton.addEventListener('click', function(e) { // Pass event 'e'
-                    // Check if already disabled
+                navButton.addEventListener('click', function (e) {
                     if (navButton.classList.contains('disabled')) {
-                        e.preventDefault(); // Prevent navigation if already clicked
+                        e.preventDefault();
                         return;
                     }
-
-                    navButton.classList.add('disabled', 'pointer-events-none');
+                    navButton.classList.add('disabled');
+                    navButton.style.pointerEvents = 'none';
                     buttonTextSpan.classList.add('hidden');
                     buttonLoadingSpan.classList.remove('hidden');
-                    // Don't prevent default, let the navigation happen
                 });
 
-                window.addEventListener('pageshow', function(event) {
-                     if (event.persisted) {
-                         navButton.classList.remove('disabled', 'pointer-events-none');
-                         buttonTextSpan.classList.remove('hidden');
-                         buttonLoadingSpan.classList.add('hidden');
-                     }
-                 });
-
-            } else {
-                 console.warn(`Navigation button elements not found for ID: ${buttonId}`);
+                window.addEventListener('pageshow', function (event) {
+                    if (event.persisted) {
+                        navButton.classList.remove('disabled');
+                        navButton.style.pointerEvents = 'auto';
+                        buttonTextSpan.classList.remove('hidden');
+                        buttonLoadingSpan.classList.add('hidden');
+                    }
+                });
             }
         }
         setupNavLinkLoading('view-similar-button');
-        setupNavLinkLoading('find-playlists-button'); // Assumes this button exists
-
+        setupNavLinkLoading('find-playlists-button');
     });
 </script>
 {% endblock %}

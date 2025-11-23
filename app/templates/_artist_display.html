@@ -1,232 +1,327 @@
-{# --- START OF (REVISED) FILE templates/_artist_display.html --- #}
-{# Expects:
-    'display_artist' (full artist object),
-    'display_releases' (list of FULL album objects),
-    'top_tracks' (list of track objects, optional),
-    'release_stats' (dict of calculated stats, optional),
-    'lastfm_tags' (list of tag strings, optional, PASSED FROM search.html)
-#}
+{# --- REVISED _artist_display.html --- #}
+{# Expects: 'display_artist', 'display_releases', 'top_tracks', 'release_stats', 'lastfm_tags' #}
 
 {% if display_artist %}
-{# --- Artist Header --- #}
-<div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden md:flex mb-6">
-    <div class="md:w-1/3">
-        {% if display_artist.images %}
-            <img src="{{ display_artist.images[0].url }}" alt="{{ display_artist.name }} Profile Picture" class="object-cover w-full h-full">
-        {% else %}
-            <div class="w-full h-full bg-gray-700 flex items-center justify-center"><span class="text-gray-500">No Image</span></div>
-        {% endif %}
-    </div>
-    <div class="md:w-2/3 p-6">
-        <h3 class="text-4xl font-bold mb-2 text-green-400">{{ display_artist.name }}</h3>
-         {% if display_artist.external_urls and display_artist.external_urls.spotify %}
-            <a href="{{ display_artist.external_urls.spotify }}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 text-sm mb-4 inline-block">View on Spotify ↗</a>
-        {% endif %}
-        {# --- Core Stats --- #}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="bg-gray-700 p-4 rounded"><p class="text-sm text-gray-400 uppercase">Followers</p>{% if display_artist.followers and display_artist.followers.total is not none %}<p class="text-2xl font-semibold">{{ "{:,}".format(display_artist.followers.total) }}</p>{% else %}<p class="text-2xl font-semibold text-gray-500">N/A</p>{% endif %}</div>
-            <div class="bg-gray-700 p-4 rounded"><p class="text-sm text-gray-400 uppercase">Current Popularity</p>{% if display_artist.popularity is not none %}<p class="text-2xl font-semibold">{{ display_artist.popularity }} / 100</p><div class="w-full bg-gray-600 rounded-full h-2.5 mt-1"><div class="bg-green-500 h-2.5 rounded-full" style="width: {{ display_artist.popularity }}%"></div></div>{% else %}<p class="text-2xl font-semibold text-gray-500">N/A</p><div class="w-full bg-gray-600 rounded-full h-2.5 mt-1"><div class="bg-gray-500 h-2.5 rounded-full" style="width: 0%"></div></div>{% endif %}</div>
-        </div>
-
-        {# --- Genres & Tags --- #}
-        {# Combine Spotify genres and Last.fm tags #}
-        {% set spotify_genres_lower = (display_artist.genres or []) | map('lower') | list %}
-        {% set lastfm_tags_lower = (lastfm_tags or []) | map('lower') | list %} {# Lowercase tags directly #}
-        {# Create a combined set for uniqueness, then convert back to list and sort #}
-        {% set combined_tags = (spotify_genres_lower + lastfm_tags_lower) | unique | sort %}
-
-        {% if combined_tags %}
-        <div class="mb-4">
-            <p class="text-sm text-gray-400 uppercase mb-1">Genres & Tags</p>
-            <div class="flex flex-wrap gap-2">
-                {% for tag in combined_tags %}
-                    {# Optionally style differently based on source #}
-                    {% if tag in spotify_genres_lower and tag in lastfm_tags_lower %}
-                        {# In both #}
-                        <span class="bg-green-700 text-green-100 px-3 py-1 rounded-full text-sm" title="Genre (Spotify) & Tag (Last.fm)">{{ tag }}</span>
-                    {% elif tag in spotify_genres_lower %}
-                         {# Only Spotify #}
-                        <span class="bg-green-600 text-green-100 px-3 py-1 rounded-full text-sm" title="Genre (Spotify)">{{ tag }}</span>
-                    {% elif tag in lastfm_tags_lower %}
-                         {# Only Last.fm #}
-                         <span class="bg-red-700 text-red-100 px-3 py-1 rounded-full text-sm" title="Tag (Last.fm)">{{ tag }}</span>
-                    {% else %}
-                         {# Should not happen, but fallback #}
-                         <span class="bg-gray-600 text-gray-200 px-3 py-1 rounded-full text-sm">{{ tag }}</span>
-                    {% endif %}
-                {% endfor %}
+{# --- Artist Header Card --- #}
+<div class="card mb-6">
+    <div class="grid" style="grid-template-columns: 300px 1fr; gap: calc(var(--spacing-xl) * 1.5); align-items: start;">
+        {# Artist Image #}
+        <div>
+            {% if display_artist.images %}
+            <img src="{{ display_artist.images[0].url }}" alt="{{ display_artist.name }}"
+                style="width: 100%; border-radius: var(--radius-lg); aspect-ratio: 1; box-shadow: var(--shadow-lg);">
+            {% else %}
+            <div
+                style="width: 100%; aspect-ratio: 1; background: rgba(255,255,255,0.05); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                <span class="text-muted">No Image</span>
             </div>
-            <p class="text-xs text-gray-500 mt-2">Spotify genres <span class="inline-block w-2 h-2 rounded-full bg-green-600 ml-1 mr-2"></span> Last.fm tags <span class="inline-block w-2 h-2 rounded-full bg-red-700 ml-1"></span></p>
+            {% endif %}
         </div>
-        {% elif display_artist.genres %} {# Fallback if only Spotify genres exist #}
-         <div class="mb-4">
-             <p class="text-sm text-gray-400 uppercase mb-1">Genres (Spotify)</p>
-             <div class="flex flex-wrap gap-2">
-                 {% for genre in display_artist.genres %}
-                     <span class="bg-green-600 text-green-100 px-3 py-1 rounded-full text-sm">{{ genre }}</span>
-                 {% endfor %}
-             </div>
-         </div>
-         {% elif lastfm_tags %} {# Fallback if only Last.fm tags exist #}
-         <div class="mb-4">
-             <p class="text-sm text-gray-400 uppercase mb-1">Tags (Last.fm)</p>
-             <div class="flex flex-wrap gap-2">
-                 {% for tag in lastfm_tags %}
-                     <span class="bg-red-700 text-red-100 px-3 py-1 rounded-full text-sm">{{ tag }}</span>
-                 {% endfor %}
-             </div>
-         </div>
-         {% endif %} {# End combined_tags check #}
 
+        {# Artist Info #}
+        <div>
+            <h2 style="font-size: 3rem; margin-bottom: var(--spacing-md); color: var(--primary); line-height: 1.2;">{{
+                display_artist.name }}</h2>
+            {% if display_artist.external_urls and display_artist.external_urls.spotify %}
+            <a href="{{ display_artist.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                class="text-secondary hover:text-main mb-4" style="display: inline-block; font-size: 1rem;">
+                View on Spotify ↗
+            </a>
+            {% endif %}
+
+            {# Stats Grid - Responsive auto-fit ensures all boxes are visible #}
+            <div class="grid gap-4 mb-6 mt-6" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                <div class="info-card">
+                    <p class="info-card-title">Followers</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">
+                        {% if display_artist.followers and display_artist.followers.total is not none %}
+                        {{ "{:,}".format(display_artist.followers.total) }}
+                        {% else %}N/A{% endif %}
+                    </p>
+                </div>
+                <div class="info-card">
+                    <p class="info-card-title">Popularity</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">
+                        {% if display_artist.popularity is not none %}
+                        {{ display_artist.popularity }}/100
+                        {% else %}N/A{% endif %}
+                    </p>
+                    {% if display_artist.popularity is not none %}
+                    <div class="progress-bar-wrapper mt-2">
+                        <div class="progress-bar" style="width: {{ display_artist.popularity }}%;"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if release_stats and release_stats.total_releases > 0 %}
+                <div class="info-card">
+                    <p class="info-card-title">Total Releases</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">{{ release_stats.total_releases }}</p>
+                </div>
+                <div class="info-card">
+                    <p class="info-card-title">Albums</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">{{ release_stats.album_count }}</p>
+                </div>
+                <div class="info-card">
+                    <p class="info-card-title">Singles/EPs</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">{{ release_stats.single_count }}</p>
+                </div>
+                <div class="info-card">
+                    <p class="info-card-title">Avg. Popularity</p>
+                    <p class="info-card-value" style="font-size: 1.2rem;">
+                        {{ release_stats.average_popularity if release_stats.average_popularity is not none else 'N/A'
+                        }}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            {# Genres & Tags #}
+            {% set spotify_genres_lower = (display_artist.genres or []) | map('lower') | list %}
+            {% set lastfm_tags_lower = (lastfm_tags or []) | map('lower') | list %}
+            {% set combined_tags = (spotify_genres_lower + lastfm_tags_lower) | unique | sort %}
+
+            {% if combined_tags %}
+            <div>
+                <p class="text-muted mb-3" style="font-size: 0.9rem; text-transform: uppercase; font-weight: 600;">
+                    Genres & Tags</p>
+                <div class="flex flex-wrap gap-2">
+                    {% for tag in combined_tags %}
+                    {% if tag in spotify_genres_lower and tag in lastfm_tags_lower %}
+                    <span class="badge badge-primary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"
+                        title="Genre (Spotify) & Tag (Last.fm)">{{ tag }}</span>
+                    {% elif tag in spotify_genres_lower %}
+                    <span class="badge badge-primary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"
+                        title="Genre (Spotify)">{{ tag }}</span>
+                    {% elif tag in lastfm_tags_lower %}
+                    <span class="badge badge-secondary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"
+                        title="Tag (Last.fm)">{{ tag }}</span>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-
-{# --- NEW: Top Tracks & Release Stats Section --- #}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-    {# --- Top Tracks Column --- #}
-    <div class="lg:col-span-2 bg-gray-800 rounded-lg shadow-xl p-6">
-        <h4 class="text-xl font-semibold mb-4 text-center">Top Tracks</h4>
+{# --- Top Tracks & Release Stats --- #}
+<div class="grid gap-6 mb-6" style="grid-template-columns: 2fr 1fr;">
+    {# Top Tracks #}
+    <div class="card">
+        <div class="section-header">
+            <span class="section-icon">🎵</span>
+            <h3 class="section-title">Top Tracks</h3>
+        </div>
         {% if top_tracks %}
-            <ol class="list-decimal list-inside space-y-3">
-                {% for track in top_tracks %}
-                <li class="ml-2 flex justify-between items-center group/track border-b border-gray-700 pb-2 last:border-b-0">
-                    <div class="flex-grow overflow-hidden mr-3">
-                        <span class="text-sm font-medium block truncate" title="{{ track.name }}">{{ track.name }}</span>
-                        <span class="text-xs text-gray-400">
-                            Popularity: {{ track.popularity if track.popularity is not none else 'N/A' }}
-                            {% if track.album and track.album.name %} • Album: <span class="italic">{{ track.album.name }}</span>{% endif %}
-                        </span>
-                    </div>
-                    {% if track.external_urls and track.external_urls.spotify %}
-                    <a href="{{ track.external_urls.spotify }}" target="_blank" rel="noopener noreferrer" title="Listen on Spotify" class="text-green-500 hover:text-green-400 flex-shrink-0 ml-2 transition-colors duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 16 16">
-                           <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.669 11.538a.498.498 0 0 1-.686.165c-1.879-1.147-4.243-1.407-7.027-.77a.499.499 0 0 1-.222-.973c3.048-.696 5.662-.397 7.77.892a.5.5 0 0 1 .166.686zm.979-2.178a.624.624 0 0 1-.858.205c-2.15-1.321-5.428-1.704-7.972-.932a.625.625 0 0 1-.362-1.194c2.905-.881 6.517-.454 8.986 1.06a.625.625 0 0 1 .206.858zm.084-2.268C10.154 5.56 5.9 5.419 3.438 6.166a.748.748 0 1 1-.434-1.432c2.825-.857 7.523-.692 10.492 1.07a.75.75 0 1 1-.754 1.298z"/>
-                        </svg>
-                    </a>
-                    {% endif %}
-                    {# Preview URL handling - often null now
-                       {% if track.preview_url %} ... play button ... {% endif %}
-                    #}
-                </li>
-                {% endfor %}
-            </ol>
-        {% elif top_tracks is not none %} {# Explicitly check for empty list vs None #}
-             <p class="text-center text-gray-500 italic">No public top tracks found for this artist in the selected market.</p>
+        <ol
+            style="list-style: decimal; list-style-position: inside; display: flex; flex-direction: column; gap: var(--spacing-sm);">
+            {% for track in top_tracks %}
+            <li class="flex justify-between items-center p-2" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <div style="flex-grow: 1; overflow: hidden; margin-right: var(--spacing-md);">
+                    <span class="font-semibold"
+                        style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                        title="{{ track.name }}">{{ track.name }}</span>
+                    <span class="text-muted" style="font-size: 0.8rem;">
+                        Popularity: {{ track.popularity if track.popularity is not none else 'N/A' }}
+                        {% if track.album and track.album.name %} • {{ track.album.name }}{% endif %}
+                    </span>
+                </div>
+                {% if track.external_urls and track.external_urls.spotify %}
+                <a href="{{ track.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                    class="text-secondary hover:text-primary" title="Listen on Spotify">
+                    <svg style="width: 1.25rem; height: 1.25rem;" fill="currentColor" viewBox="0 0 16 16">
+                        <path
+                            d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.669 11.538a.498.498 0 0 1-.686.165c-1.879-1.147-4.243-1.407-7.027-.77a.499.499 0 0 1-.222-.973c3.048-.696 5.662-.397 7.77.892a.5.5 0 0 1 .166.686zm.979-2.178a.624.624 0 0 1-.858.205c-2.15-1.321-5.428-1.704-7.972-.932a.625.625 0 0 1-.362-1.194c2.905-.881 6.517-.454 8.986 1.06a.625.625 0 0 1 .206.858zm.084-2.268C10.154 5.56 5.9 5.419 3.438 6.166a.748.748 0 1 1-.434-1.432c2.825-.857 7.523-.692 10.492 1.07a.75.75 0 1 1-.754 1.298z" />
+                    </svg>
+                </a>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+        {% elif top_tracks is not none %}
+        <p class="text-center text-muted italic">No public top tracks found.</p>
         {% else %}
-             <p class="text-center text-gray-500 italic">Top tracks could not be loaded.</p>
+        <p class="text-center text-muted italic">Top tracks could not be loaded.</p>
         {% endif %}
     </div>
 
-    {# --- Release Stats Column --- #}
-    <div class="lg:col-span-1 bg-gray-800 rounded-lg shadow-xl p-6 flex flex-col">
-        <h4 class="text-xl font-semibold mb-4 text-center">Release Summary</h4>
+    {# Release Stats #}
+    <div class="card">
+        <div class="section-header">
+            <span class="section-icon">📊</span>
+            <h3 class="section-title">Release Summary</h3>
+        </div>
         {% if release_stats and release_stats.total_releases > 0 %}
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between border-b border-gray-700 pb-1">
-                <span class="text-gray-400">Total Releases Shown:</span>
+        <div class="flex flex-col gap-3" style="font-size: 0.9rem;">
+            <div class="flex justify-between"
+                style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: var(--spacing-xs);">
+                <span class="text-secondary">Total Releases:</span>
                 <span class="font-semibold">{{ release_stats.total_releases }}</span>
             </div>
-            <div class="flex justify-between border-b border-gray-700 pb-1">
-                <span class="text-gray-400">Albums:</span>
+            <div class="flex justify-between"
+                style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: var(--spacing-xs);">
+                <span class="text-secondary">Albums:</span>
                 <span class="font-semibold">{{ release_stats.album_count }}</span>
             </div>
-            <div class="flex justify-between border-b border-gray-700 pb-1">
-                <span class="text-gray-400">Singles/EPs:</span>
+            <div class="flex justify-between"
+                style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: var(--spacing-xs);">
+                <span class="text-secondary">Singles/EPs:</span>
                 <span class="font-semibold">{{ release_stats.single_count }}</span>
             </div>
-             <div class="flex justify-between border-b border-gray-700 pb-1">
-                <span class="text-gray-400">Avg. Release Popularity:</span>
-                <span class="font-semibold">{{ release_stats.average_popularity if release_stats.average_popularity is not none else 'N/A' }} / 100</span>
+            <div class="flex justify-between"
+                style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: var(--spacing-xs);">
+                <span class="text-secondary">Avg. Popularity:</span>
+                <span class="font-semibold">{{ release_stats.average_popularity if release_stats.average_popularity is
+                    not none else 'N/A' }}/100</span>
             </div>
             <div class="flex justify-between">
-                <span class="text-gray-400">Release Years Shown:</span>
-                 <span class="font-semibold">
+                <span class="text-secondary">Release Years:</span>
+                <span class="font-semibold">
                     {% if release_stats.first_release_year and release_stats.last_release_year %}
-                        {{ release_stats.first_release_year }} - {{ release_stats.last_release_year }}
+                    {{ release_stats.first_release_year }} - {{ release_stats.last_release_year }}
                     {% elif release_stats.first_release_year %}
-                        {{ release_stats.first_release_year }}
-                    {% else %}
-                        N/A
-                    {% endif %}
-                 </span>
+                    {{ release_stats.first_release_year }}
+                    {% else %}N/A{% endif %}
+                </span>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mt-auto pt-3 text-center italic">(Based on the {{ release_stats.total_releases }} most recent albums/singles fetched)</p>
+        <p class="text-muted text-center mt-4" style="font-size: 0.75rem; font-style: italic;">
+            Based on {{ release_stats.total_releases }} most recent releases
+        </p>
         {% else %}
-            <p class="text-center text-gray-500 italic mt-4">No release data available to calculate summary statistics.</p>
+        <p class="text-center text-muted italic">No release data available.</p>
         {% endif %}
     </div>
 </div>
 
-
-{# --- Releases Section (Accordion - Unchanged Internally) --- #}
-<div class="bg-gray-800 rounded-lg shadow-xl p-6 mb-10">
-    <h4 class="text-xl font-semibold mb-4 text-center">Releases (Albums & Singles)</h4>
+{# --- Releases Accordion --- #}
+<div class="card">
+    <div class="section-header">
+        <span class="section-icon">💿</span>
+        <h3 class="section-title">Releases (Albums & Singles)</h3>
+    </div>
     {% if display_releases %}
-        <div class="space-y-4">
-            {% for release in display_releases %}
-            <details class="bg-gray-900 rounded group border border-gray-700 transition duration-300 ease-in-out open:bg-gray-850 open:shadow-md">
-                {# --- Summary Row --- #}
-                <summary class="flex justify-between items-center p-3 cursor-pointer list-none group-hover:bg-gray-700 transition duration-200">
-                    <div class="flex items-center space-x-3 min-w-0">
-                        {% if release.images %}<img src="{{ release.images[-1].url }}" alt="{{ release.name }}" class="w-12 h-12 rounded object-cover flex-shrink-0">{% else %}<div class="w-12 h-12 rounded bg-gray-700 flex items-center justify-center text-xs flex-shrink-0">?</div>{% endif %}
-                        <div class="overflow-hidden">
-                            <span class="font-medium block truncate" title="{{ release.name }}">{{ release.name }}</span>
-                            {# Use total_tracks_fetched if available, else fallback #}
-                            <span class="text-xs text-gray-400 block truncate">{{ release.album_type | capitalize }} • {{ release.release_date }}{% if release.total_tracks_fetched is defined %} • {{ release.total_tracks_fetched }} track{{ 's' if release.total_tracks_fetched != 1 else '' }}{% elif release.total_tracks is defined %} • {{ release.total_tracks }} track{{ 's' if release.total_tracks != 1 else '' }}{% endif %}</span>
-                        </div>
+    <div style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+        {% for release in display_releases %}
+        <details style="margin-bottom: 0;">
+            <summary class="flex justify-between items-center cursor-pointer">
+                <div class="flex items-center gap-3" style="min-width: 0; flex-grow: 1;">
+                    {% if release.images %}
+                    <img src="{{ release.images[-1].url }}" alt="{{ release.name }}"
+                        style="width: 3rem; height: 3rem; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0;">
+                    {% else %}
+                    <div
+                        style="width: 3rem; height: 3rem; border-radius: var(--radius-sm); background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <span style="font-size: 0.75rem;">?</span>
                     </div>
-                    <span class="text-xl text-gray-500 group-open:text-green-400 transform transition-transform duration-200 group-open:rotate-90 ml-2 flex-shrink-0">▶</span>
-                </summary>
-
-                {# --- Expanded Content Area (No Audio Features, Tracklist structure same) --- #}
-                <div class="p-4 border-t border-gray-700">
-                    {# --- Additional Metrics --- #}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div class="bg-gray-700 p-3 rounded"><p class="text-xs text-gray-400 uppercase mb-1">Release Popularity</p>{% if release.popularity is defined %}<p class="text-lg font-semibold">{{ release.popularity }} / 100</p><div class="w-full bg-gray-600 rounded-full h-1.5 mt-1"><div class="bg-green-500 h-1.5 rounded-full" style="width: {{ release.popularity }}%"></div></div>{% else %}<p class="text-lg font-semibold text-gray-500">N/A</p>{% endif %}</div>
-                        <div class="bg-gray-700 p-3 rounded"><p class="text-xs text-gray-400 uppercase mb-1">Label</p><p class="text-sm text-gray-200 truncate" title="{{ release.label | default('N/A') }}">{{ release.label | default('N/A') }}</p></div>
-                        {% if release.genres %}<div class="bg-gray-700 p-3 rounded md:col-span-2"><p class="text-xs text-gray-400 uppercase mb-1">Genres</p><div class="flex flex-wrap gap-1 mt-1">{% for genre in release.genres %}<span class="bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full text-xs">{{ genre }}</span>{% endfor %}</div></div>{% endif %}
-                        <div class="bg-gray-700 p-3 rounded md:col-span-2"><p class="text-xs text-gray-400 uppercase mb-1">Copyrights</p>{% if release.copyrights %}<ul class="text-xs text-gray-300 list-disc list-inside space-y-0.5">{% for c in release.copyrights %}<li>({{ c.type | upper }}) {{ c.text }}</li>{% endfor %}</ul>{% else %}<p class="text-xs text-gray-300">N/A</p>{% endif %}</div>
+                    {% endif %}
+                    <div style="overflow: hidden;">
+                        <span class="font-semibold"
+                            style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                            title="{{ release.name }}">{{ release.name }}</span>
+                        <span class="text-muted"
+                            style="font-size: 0.8rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ release.album_type | capitalize }} • {{ release.release_date }}
+                            {% if release.total_tracks_fetched is defined %} • {{ release.total_tracks_fetched }}
+                            tracks{% endif %}
+                        </span>
                     </div>
-
-                     {# --- Tracklist Section --- #}
-                     <h5 class="text-md font-semibold mb-3 text-gray-300 border-t border-gray-700 pt-4">Tracklist (First Page)</h5>
-                     {% if release.tracks and release.tracks.get('items') %}
-                        <ol class="list-decimal list-inside space-y-2 text-sm text-gray-300">
-                            {% for track in release.tracks['items'] %}
-                                <li class="ml-2 flex justify-between items-center group/track">
-                                    <div><span>{% if track.track_number %}{{ track.track_number }}. {% endif %}{{ track.name }}</span>{% if track.duration_ms %}<span class="text-xs text-gray-500 ml-2">({{ (track.duration_ms / 60000) | round(0, 'floor') }}:{{ '%02d'|format((track.duration_ms / 1000) % 60) }})</span>{% endif %}</div>
-                                    {% if track.external_urls and track.external_urls.spotify %}<a href="{{ track.external_urls.spotify }}" target="_blank" rel="noopener noreferrer" title="Listen on Spotify" class="text-xs text-green-500 opacity-0 group-hover/track:opacity-100 transition-opacity duration-150 ml-2 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg></a>{% endif %}
-                                </li>
-                            {% endfor %}
-                        </ol>
-                        {% if release.tracks.next %}
-                            <p class="text-xs text-gray-500 mt-2 italic">(Showing first page of tracks. Use Spotify link for full list.)</p>
-                        {% endif %}
-                     {% elif release.tracks_error %}
-                         <p class="text-sm text-red-400">{{ release.tracks_error }}</p>
-                     {% else %}
-                         <p class="text-sm text-gray-500 italic">Tracklist information could not be loaded.</p>
-                     {% endif %}
-
-                     {# --- Spotify Link --- #}
-                     <div class="mt-4 pt-3 border-t border-gray-700">
-                         {% if release.external_urls and release.external_urls.spotify %}<a href="{{ release.external_urls.spotify }}" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-400 hover:text-blue-300 inline-flex items-center">View {{ release.album_type | capitalize }} on Spotify ↗</a>{% endif %}
-                     </div>
-                     <p class="text-xs text-gray-500 mt-3">Note: Stream counts and precise playlist placements are not available via the public Spotify API.</p>
                 </div>
-            </details>
-            {% endfor %}
-        </div>
-        {# Message about limit remains relevant #}
-        {% if display_releases | length >= 20 %}<p class="text-xs text-gray-500 mt-4 text-center">Showing details for up to 20 primary releases. More may be available on Spotify.</p>{% endif %}
+            </summary>
+
+            <div
+                style="padding: var(--spacing-md); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.05); margin-top: var(--spacing-md);">
+                {# Release Details #}
+                <div class="grid gap-4 mb-4" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    <div class="info-card">
+                        <p class="info-card-title">Popularity</p>
+                        <p class="info-card-value" style="font-size: 1.25rem;">
+                            {% if release.popularity is defined %}{{ release.popularity }}/100{% else %}N/A{% endif %}
+                        </p>
+                        {% if release.popularity is defined %}
+                        <div class="progress-bar-wrapper mt-1">
+                            <div class="progress-bar" style="width: {{ release.popularity }}%;"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="info-card">
+                        <p class="info-card-title">Label</p>
+                        <p style="font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                            title="{{ release.label | default('N/A') }}">{{ release.label | default('N/A') }}</p>
+                    </div>
+                </div>
+
+                {# Genres #}
+                {% if release.genres %}
+                <div class="mb-4">
+                    <p class="text-muted mb-2" style="font-size: 0.85rem; text-transform: uppercase;">Genres</p>
+                    <div class="flex flex-wrap gap-1">
+                        {% for genre in release.genres %}
+                        <span class="badge badge-secondary">{{ genre }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {# Tracklist #}
+                <h4 class="font-semibold mb-2"
+                    style="padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.05);">
+                    Tracklist
+                </h4>
+                {% if release.tracks and release.tracks.get('items') %}
+                <ol
+                    style="list-style: decimal; list-style-position: inside; display: flex; flex-direction: column; gap: var(--spacing-xs); font-size: 0.9rem;">
+                    {% for track in release.tracks['items'] %}
+                    <li class="flex justify-between items-center">
+                        <span>{{ track.name }}
+                            {% if track.duration_ms %}
+                            <span class="text-muted" style="font-size: 0.75rem;">
+                                ({{ (track.duration_ms / 60000) | round(0, 'floor') }}:{{
+                                '%02d'|format((track.duration_ms / 1000) % 60) }})
+                            </span>
+                            {% endif %}
+                        </span>
+                        {% if track.external_urls and track.external_urls.spotify %}
+                        <a href="{{ track.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                            class="text-secondary hover:text-primary" style="font-size: 0.75rem;">↗</a>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% if release.tracks.next %}
+                <p class="text-muted mt-2" style="font-size: 0.75rem; font-style: italic;">
+                    (Showing first page of tracks. Use Spotify link for full list.)
+                </p>
+                {% endif %}
+                {% else %}
+                <p class="text-muted italic" style="font-size: 0.9rem;">Tracklist information could not be loaded.</p>
+                {% endif %}
+
+                {# Spotify Link #}
+                {% if release.external_urls and release.external_urls.spotify %}
+                <div class="mt-4 pt-3" style="border-top: 1px solid rgba(255,255,255,0.05);">
+                    <a href="{{ release.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                        class="text-secondary hover:text-primary" style="font-size: 0.9rem;">
+                        View {{ release.album_type | capitalize }} on Spotify ↗
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+    {% if display_releases | length >= 20 %}
+    <p class="text-muted text-center mt-4" style="font-size: 0.8rem;">
+        Showing details for up to 20 primary releases. More may be available on Spotify.
+    </p>
+    {% endif %}
     {% else %}
-        <p class="text-center text-gray-400">No primary releases found for this artist.</p>
+    <p class="text-center text-muted">No primary releases found for this artist.</p>
     {% endif %}
 </div>
 
 {% else %}
-    {# Fallback if display_artist is missing #}
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 mb-10"><p class="text-center text-gray-400">Artist data not available.</p></div>
+<div class="card text-center">
+    <p class="text-muted">Artist data not available.</p>
+</div>
 {% endif %}

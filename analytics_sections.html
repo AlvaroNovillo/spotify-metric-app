@@ -1,0 +1,236 @@
+{# Analytics Sections - Insert after genres/tags section #}
+
+{# === CAREER INSIGHTS DASHBOARD === #}
+{% if career_metrics %}
+<div class="card mb-6">
+    <div class="section-header">
+        <span class="section-icon">📊</span>
+        <h3 class="section-title">Career Insights</h3>
+    </div>
+
+    <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        {% if career_metrics.longevity_years %}
+        <div class="info-card">
+            <p class="info-card-title">Career Span</p>
+            <p class="info-card-value">{{ career_metrics.longevity_years }} years</p>
+        </div>
+        {% endif %}
+
+        {% if career_metrics.productivity %}
+        <div class="info-card">
+            <p class="info-card-title">Productivity</p>
+            <p class="info-card-value">{{ career_metrics.productivity }} releases/year</p>
+        </div>
+        {% endif %}
+
+        {% if career_metrics.consistency_score %}
+        <div class="info-card">
+            <p class="info-card-title">Consistency</p>
+            <p class="info-card-value">{{ career_metrics.consistency_score }}/100</p>
+        </div>
+        {% endif %}
+
+        {% if career_metrics.evolution_score %}
+        <div class="info-card">
+            <p class="info-card-title">Genre Diversity</p>
+            <p class="info-card-value">{{ career_metrics.evolution_score }}/100</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if career_metrics.breakthrough_release %}
+    <div class="mt-4 p-4"
+        style="background: rgba(var(--primary-rgb), 0.1); border-radius: var(--radius-md); border-left: 3px solid var(--primary);">
+        <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.25rem;">🏆 Breakthrough Release</p>
+        <p class="font-semibold">{{ career_metrics.breakthrough_release.name }}</p>
+        <p class="text-muted" style="font-size: 0.85rem;">{{ career_metrics.breakthrough_release.year }} • Popularity:
+            {{ career_metrics.breakthrough_release.popularity }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# === POPULARITY DISTRIBUTION === #}
+{% if popularity_dist %}
+<div class="card mb-6">
+    <div class="section-header">
+        <span class="section-icon">📈</span>
+        <h3 class="section-title">Track Popularity Analysis</h3>
+    </div>
+
+    <div class="grid gap-4 mb-4" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
+        <div class="info-card">
+            <p class="info-card-title">Average</p>
+            <p class="info-card-value">{{ popularity_dist.mean }}</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Median</p>
+            <p class="info-card-value">{{ popularity_dist.median }}</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Range</p>
+            <p class="info-card-value">{{ popularity_dist.min }}-{{ popularity_dist.max }}</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Hit Rate</p>
+            <p class="info-card-value">{{ popularity_dist.hit_rate }}%</p>
+        </div>
+    </div>
+
+    {# Simple histogram visualization #}
+    {% if popularity_dist.histogram %}
+    <div>
+        <p class="text-muted mb-2" style="font-size: 0.85rem;">Distribution ({{ popularity_dist.total_tracks }} tracks)
+        </p>
+        {% for range, count in popularity_dist.histogram.items() %}
+        <div class="mb-2">
+            <div class="flex justify-between items-center mb-1">
+                <span style="font-size: 0.8rem;">{{ range }}</span>
+                <span style="font-size: 0.8rem; color: var(--secondary);">{{ count }} tracks</span>
+            </div>
+            <div
+                style="background: rgba(255,255,255,0.05); border-radius: var(--radius-sm); height: 8px; overflow: hidden;">
+                <div
+                    style="background: var(--primary); height: 100%; width: {{ (count / popularity_dist.total_tracks * 100)|round(1) }}%; transition: width 0.3s ease;">
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# === RELEASE PATTERNS === #}
+{% if release_patterns %}
+<div class="card mb-6">
+    <div class="section-header">
+        <span class="section-icon">📅</span>
+        <h3 class="section-title">Release Patterns</h3>
+    </div>
+
+    <div class="grid gap-4 mb-4" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        {% if release_patterns.most_productive_year %}
+        <div class="info-card">
+            <p class="info-card-title">Most Productive Year</p>
+            <p class="info-card-value">{{ release_patterns.most_productive_year[0] }}</p>
+            <p class="text-muted" style="font-size: 0.75rem;">{{ release_patterns.most_productive_year[1] }} releases
+            </p>
+        </div>
+        {% endif %}
+
+        {% if release_patterns.seasonal_pattern %}
+        <div class="info-card">
+            <p class="info-card-title">Favorite Month</p>
+            <p class="info-card-value">{{ release_patterns.seasonal_pattern.month_name }}</p>
+            <p class="text-muted" style="font-size: 0.75rem;">{{ release_patterns.seasonal_pattern.count }} releases</p>
+        </div>
+        {% endif %}
+
+        {% if release_patterns.avg_time_between_releases %}
+        <div class="info-card">
+            <p class="info-card-title">Release Frequency</p>
+            <p class="info-card-value">{{ release_patterns.avg_time_between_releases }} years</p>
+            <p class="text-muted" style="font-size: 0.75rem;">between releases</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Release type breakdown #}
+    {% if release_patterns.releases_by_type %}
+    <div class="mt-4">
+        <p class="text-muted mb-2" style="font-size: 0.85rem;">Release Types</p>
+        <div class="flex gap-3 flex-wrap">
+            {% for type, count in release_patterns.releases_by_type.items() %}
+            <div class="px-3 py-2"
+                style="background: rgba(var(--primary-rgb), 0.1); border-radius: var(--radius-md); border: 1px solid rgba(var(--primary-rgb), 0.2);">
+                <span class="font-semibold">{{ count }}</span>
+                <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.25rem;">{{ type }}{{ 's' if count !=
+                    1 else '' }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# === COLLABORATORS === #}
+{% if collaborators and collaborators.collaborators %}
+<div class="card mb-6">
+    <div class="section-header">
+        <span class="section-icon">🤝</span>
+        <h3 class="section-title">Top Collaborators</h3>
+    </div>
+
+    <div class="grid gap-4 mb-4" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="info-card">
+            <p class="info-card-title">Total Collaborators</p>
+            <p class="info-card-value">{{ collaborators.total_collaborators }}</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Collaboration Rate</p>
+            <p class="info-card-value">{{ collaborators.collaboration_rate }}%</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Featured Tracks</p>
+            <p class="info-card-value">{{ collaborators.tracks_with_features }}</p>
+        </div>
+    </div>
+
+    {# Top collaborators list #}
+    <div>
+        <p class="text-muted mb-2" style="font-size: 0.85rem;">Most Frequent Collaborators</p>
+        <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
+            {% for name, count in collaborators.collaborators[:10] %}
+            <div class="flex justify-between items-center p-2"
+                style="background: rgba(255,255,255,0.03); border-radius: var(--radius-sm);">
+                <span style="font-size: 0.9rem;">{{ name }}</span>
+                <span class="px-2 py-1"
+                    style="background: var(--primary); color: var(--bg-primary); border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600;">{{
+                    count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# === GENRE EVOLUTION === #}
+{% if genre_evolution and genre_evolution.all_genres %}
+<div class="card mb-6">
+    <div class="section-header">
+        <span class="section-icon">🎨</span>
+        <h3 class="section-title">Genre Evolution</h3>
+    </div>
+
+    <div class="grid gap-4 mb-4" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="info-card">
+            <p class="info-card-title">Total Genres</p>
+            <p class="info-card-value">{{ genre_evolution.all_genres|length }}</p>
+        </div>
+        <div class="info-card">
+            <p class="info-card-title">Experimentation</p>
+            <p class="info-card-value">{{ genre_evolution.experimentation_score }}</p>
+            <p class="text-muted" style="font-size: 0.75rem;">genres/release</p>
+        </div>
+    </div>
+
+    {# Genre timeline by period #}
+    {% if genre_evolution.genres_by_period %}
+    <div class="mt-4">
+        <p class="text-muted mb-2" style="font-size: 0.85rem;">Genres by Period</p>
+        {% for period, genres in genre_evolution.genres_by_period.items()|sort %}
+        <div class="mb-3 p-3" style="background: rgba(255,255,255,0.03); border-radius: var(--radius-md);">
+            <p class="font-semibold mb-2" style="color: var(--secondary);">{{ period }}</p>
+            <div class="flex gap-2 flex-wrap">
+                {% for genre in genres %}
+                <span class="tag">{{ genre }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}

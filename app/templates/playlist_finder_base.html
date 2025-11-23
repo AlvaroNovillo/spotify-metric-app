@@ -1,68 +1,72 @@
-{# --- START OF (CORRECTED & COMPLETE) FILE templates/playlist_finder_base.html --- #}
+{# --- REVISED playlist_finder_base.html --- #}
 {% extends 'base.html' %}
 
-{% block title %}
-    Find Playlists for {{ artist_name }}
-{% endblock %}
+{% block title %}Find Playlists - {{ artist_name }}{% endblock %}
 
 {% block content %}
-<h1 class="text-3xl font-bold mb-4 text-center">Find Playlists & Contact Curators for {{ artist_name }}</h1>
-<p class="text-center text-gray-400 text-sm mb-6">Select a track, find relevant playlists, then use the AI Smart Filter to pinpoint the best matches.</p>
+<div class="container fade-in">
+    <div class="text-center mb-8">
+        <h1>Find Playlists for <span style="color: var(--primary);">{{ artist_name }}</span></h1>
+        <p class="text-secondary mt-4">Select a song to find relevant playlists</p>
+    </div>
 
-{# --- Main Content Area (Two Columns) --- #}
-<div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <div class="grid gap-8" style="grid-template-columns: 1fr 1fr;">
+        {# --- Left Column: Song Selection --- #}
+        <div class="card" style="height: fit-content;">
+            <form id="playlist-finder-form" method="GET"
+                action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}">
+                <input type="hidden" name="artist_name" value="{{ artist_name }}">
 
-    {# --- Left Column (Wider): Form --- #}
-    <div class="lg:col-span-7 bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-        
-        {# --- NEW: Upload Section (Preserved) --- #}
-        <div class="mb-6 pb-6 border-b border-gray-700">
-            <h2 class="text-xl font-semibold mb-3 text-center">Have a list already?</h2>
-             <form id="upload-form" class="text-center">
-                <label for="playlist-upload-input" class="w-full cursor-pointer bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-3 px-4 rounded transition duration-300 inline-block">
-                    <span id="upload-label-text">📂 Upload Playlist Excel File</span>
-                </label>
-                <input type="file" id="playlist-upload-input" class="hidden" accept=".xlsx, .xls">
-                <p id="upload-status" class="text-xs text-gray-500 mt-2 h-4"></p>
-             </form>
-             <p class="text-center text-gray-500 my-2">OR</p>
-        </div>
+                <h2 style="font-size: 1.25rem; margin-bottom: 1rem; text-align: center;">1. Select a Song</h2>
 
-
-        <form method="GET" action="{{ url_for('playlists.show_playlist_finder', artist_id=artist_id) }}" id="playlist-finder-form">
-            
-            {# 1. Track Selection #}
-            <h2 class="text-xl font-semibold mb-3 text-center">1. Select a Song by {{ artist_name }}</h2>
-
-            {# Song Search Bar #}
-            <div class="mb-4 relative">
-                <input type="search" id="song-search-input" placeholder="Search for a song by title or release..."
-                       class="w-full px-4 py-2 pl-10 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                {# Song Search Bar #}
+                <div class="form-group" style="position: relative;">
+                    <input type="search" id="song-search-input" placeholder="Search for a song..." class="form-input"
+                        style="padding-left: 2.5rem;">
+                    <svg style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 1.25rem; height: 1.25rem; color: var(--text-muted);"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
                 </div>
-            </div>
 
-            {# Accordion-style Song List #}
-            {% if all_artist_tracks %}
-                <div id="song-list-container" class="space-y-2 mb-6 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
+                {# Song List #}
+                {% if all_artist_tracks %}
+                <div id="song-list-container"
+                    style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem; margin-bottom: 1.5rem;"
+                    class="custom-scrollbar">
                     {% for release_id, release in all_artist_tracks.items() %}
-                    <details class="release-accordion bg-gray-900 rounded group border border-gray-700 transition duration-300" data-release-name="{{ release.name | lower }}">
-                        <summary class="flex items-center p-2 cursor-pointer list-none group-hover:bg-gray-700">
-                            <img src="{{ release.images[-1].url if release.images else 'https://via.placeholder.com/40' }}" alt="{{ release.name }} Cover" class="w-10 h-10 rounded object-cover flex-shrink-0 mr-3">
-                            <div class="overflow-hidden">
-                                <span class="font-medium block truncate text-gray-200">{{ release.name }}</span>
-                                <span class="text-xs text-gray-400">{{ release.release_date.split('-')[0] if release.release_date }}</span>
+                    <details class="release-accordion" style="margin-bottom: 0.5rem;"
+                        data-release-name="{{ release.name | lower }}">
+                        <summary>
+                            <div class="flex items-center gap-2" style="overflow: hidden;">
+                                <img src="{{ release.images[-1].url if release.images else 'https://via.placeholder.com/40' }}"
+                                    alt="Cover"
+                                    style="width: 2.5rem; height: 2.5rem; border-radius: var(--radius-sm); object-fit: cover;">
+                                <div style="overflow: hidden;">
+                                    <span
+                                        style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">{{
+                                        release.name }}</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">{{
+                                        release.release_date.split('-')[0] if release.release_date }}</span>
+                                </div>
                             </div>
-                            <span class="text-xl text-gray-500 group-open:text-green-400 transform transition-transform duration-200 group-open:rotate-90 ml-auto flex-shrink-0">▶</span>
+                            <span style="color: var(--text-muted);">▼</span>
                         </summary>
-                        <div class="p-2 border-t border-gray-700 space-y-2">
+                        <div class="space-y-2">
                             {% for track in release.tracks %}
-                            <label class="song-item-label flex items-center bg-gray-700 p-2 rounded-lg hover:bg-gray-600 transition duration-200 cursor-pointer border-2 border-transparent has-[:checked]:border-green-500" data-track-name="{{ track.name | lower }}">
-                                <input type="radio" name="selected_track_id" value="{{ track.id }}" class="absolute opacity-0 w-0 h-0 peer" required {% if track.id == request.args.get('selected_track_id') %}checked{% endif %}>
-                                <div class="flex-grow overflow-hidden"><span class="block text-sm font-medium text-gray-100 truncate" title="{{ track.name }}">{{ track.name }}</span></div>
-                                <div class="ml-auto flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-500 peer-checked:border-green-500 peer-checked:bg-green-500 flex items-center justify-center">
-                                    <svg class="w-3 h-3 text-white opacity-0 peer-checked:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                            <label class="song-item-label" data-track-name="{{ track.name | lower }}">
+                                <input type="radio" name="selected_track_id" value="{{ track.id }}" class="hidden"
+                                    required {% if track.id==request.args.get('selected_track_id') %}checked{% endif %}>
+                                <span
+                                    style="font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 0.5rem;">{{
+                                    track.name }}</span>
+                                <div class="radio-indicator">
+                                    <svg style="width: 0.75rem; height: 0.75rem; color: #000;" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                            d="M5 13l4 4L19 7"></path>
+                                    </svg>
                                 </div>
                             </label>
                             {% endfor %}
@@ -70,793 +74,246 @@
                     </details>
                     {% endfor %}
                 </div>
-                <p id="no-song-results" class="text-center text-gray-500 italic mb-4 hidden">No songs match your search.</p>
-            {% elif all_artist_tracks is not none %}
-                 <p class="text-center text-gray-500 italic mb-4">No public tracks found for {{ artist_name }}.</p>
-            {% else %}
-                 <p class="text-center text-red-400 italic mb-4">Could not load tracks for {{ artist_name }}.</p>
-            {% endif %}
+                <p id="no-song-results" class="hidden"
+                    style="text-align: center; color: var(--text-muted); font-style: italic;">No
+                    songs match your
+                    search.</p>
+                {% elif all_artist_tracks is not none %}
+                <p style="text-align: center; color: var(--text-muted);">No public tracks found.</p>
+                {% else %}
+                <p style="text-align: center; color: var(--error);">Could not load tracks.</p>
+                {% endif %}
 
-            {# Keywords and Action Buttons #}
-            <h2 class="text-xl font-semibold mb-3 text-center mt-6">2. Add Optional Search Keywords</h2>
-            <div class="mb-5">
-                 <label for="user_keywords" class="block text-sm font-medium text-gray-300 mb-1">Enter additional keywords (comma-separated):</label>
-                 <input type="text" name="user_keywords" id="user_keywords" value="{{ request.args.get('user_keywords', '') }}" placeholder="e.g., chill vibes, workout, study" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-green-500 focus:border-green-500 text-white">
+                {# Keywords #}
+                <div style="margin-top: 2rem;">
+                    <h2 style="font-size: 1.25rem; margin-bottom: 1rem; text-align: center;">2. Optional Keywords</h2>
+                    <div class="form-group">
+                        <label for="user_keywords" class="form-label">Enter additional keywords
+                            (comma-separated):</label>
+                        <input type="text" name="user_keywords" id="user_keywords"
+                            value="{{ request.args.get('user_keywords', '') }}"
+                            placeholder="e.g., chill vibes, workout, study" class="form-input">
+                    </div>
+                </div>
+
+                {# Actions #}
+                <div class="flex flex-col gap-4 mt-6">
+                    <button type="submit" id="find-playlists-button" class="btn btn-primary"
+                        style="width: 100%; font-size: 1.1rem;">
+                        <span class="button-text">Find Playlists</span>
+                        <span class="button-loading hidden animate-spin">Searching...</span>
+                    </button>
+
+                    <div id="post-search-actions" class="hidden flex flex-col gap-4">
+                        <button type="button" id="contact-curators-button" class="btn"
+                            style="background-color: var(--accent-purple); color: white; width: 100%;">Contact
+                            Curators...</button>
+                        <button type="button" id="show-download-modal-btn" class="btn"
+                            style="background-color: var(--success); color: white; width: 100%;">Download
+                            Results...</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {# --- Right Column: Results --- #}
+        <div class="card" style="display: flex; flex-direction: column; min-height: 500px;">
+            <h2 style="font-size: 1.25rem; margin-bottom: 1.5rem; text-align: center;">Search Results</h2>
+
+            <div id="progress-container"
+                style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: var(--radius-md);">
+                <div id="progress-status" style="text-align: center; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                    Initializing...</div>
+                <div
+                    style="width: 100%; height: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 1rem; overflow: hidden;">
+                    <div id="progress-bar"
+                        style="width: 0%; height: 100%; background: var(--success); transition: width 0.3s ease;"></div>
+                </div>
+                <div id="keywords-display-area"
+                    style="display: none; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                    <strong>Using keywords:</strong> <span id="keywords-list"></span>...
+                </div>
             </div>
-             <div class="space-y-4 mt-6">
-                 {# --- BUTTON FIX: Added spans for loading state --- #}
-                 <button type="submit" id="find-playlists-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg disabled:opacity-50 disabled:cursor-wait">
-                    <span class="button-text">Find Playlists</span>
-                    <span class="button-loading hidden animate-pulse">Searching...</span>
-                 </button>
-                 <div id="post-search-actions" class="hidden flex flex-col sm:flex-row gap-4">
-                    <button type="button" id="contact-curators-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Contact Curators...</button>
-                    <button type="button" id="show-download-modal-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300 text-lg">Download Results...</button>
-                 </div>
-             </div>
-        </form>
+
+            <div id="playlist-results-container" style="flex-grow: 1;">
+                {% if not request.args.get('selected_track_id') %}
+                <div
+                    style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-style: italic;">
+                    Select a song and click "Find Playlists" or upload a file.
+                </div>
+                {% endif %}
+            </div>
+
+            <div id="email-status-container" style="display: none; margin-top: 1.5rem;">
+                <h3 style="font-size: 1rem; margin-bottom: 0.5rem; text-align: center;">Email Sending Progress</h3>
+                <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: var(--radius-md); max-height: 200px; overflow-y: auto;"
+                    class="custom-scrollbar">
+                    <pre id="email-log"
+                        style="font-size: 0.75rem; color: var(--text-secondary); white-space: pre-wrap; font-family: monospace;"></pre>
+                </div>
+            </div>
+        </div>
+
     </div>
-    {# --- Right Column: Status & Results --- #}
-    <div class="lg:col-span-5 bg-gray-850 p-6 rounded-lg shadow-inner border border-gray-700 flex flex-col">
-        <h2 class="text-xl font-semibold mb-5 text-center text-gray-300">Search Status & Results</h2>
-        <div id="progress-container" class="mb-4 p-4 bg-gray-700 rounded-lg shadow" style="display: none;">
-            <div class="text-center text-sm font-medium text-gray-300 mb-2" id="progress-status">Initializing...</div>
-            <div class="w-full bg-gray-600 rounded-full h-4 overflow-hidden"><div id="progress-bar" class="bg-green-500 h-4 rounded-full transition-all duration-300 ease-linear" style="width: 0%"></div></div>
-             <div id="keywords-display-area" class="mt-3 text-xs text-gray-400" style="display: none;"><strong>Using keywords:</strong> <span id="keywords-list"></span>...</div>
-        </div>
-        <div id="playlist-results-container" class="flex-grow min-h-[200px]">
-            {% if not request.args.get('selected_track_id') %}<div class="flex items-center justify-center h-full"><p class="text-center text-gray-500 italic">Select a song and click "Find Playlists" or upload a file to see results.</p></div>{% endif %}
-        </div>
-         <div id="email-status-container" class="mt-6 hidden">
-              <h3 class="text-lg font-semibold mb-3 text-center text-gray-300">Email Sending Progress</h3>
-              <div class="bg-gray-700 p-4 rounded-lg shadow max-h-60 overflow-y-auto custom-scrollbar"><pre id="email-log" class="text-xs text-gray-300 whitespace-pre-wrap"></pre></div>
-         </div>
-    </div>{# End Right Column #}
+</div>
 
-</div>{# End Main Grid #}
+{# --- Modals --- #}
 
-{# --- Email Overlay Modal --- #}
-<div id="email-overlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+{# Email Overlay #}
+<div id="email-overlay" class="hidden"
+    style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card"
+        style="width: 100%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; padding: 0;">
+        <div style="padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <h2 style="text-align: center; color: var(--accent-purple); margin-bottom: 1rem;">Generate & Send Outreach
+                Emails</h2>
 
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <h2 class="text-2xl font-bold mb-4 text-center text-purple-300">Generate & Send Outreach Emails</h2>
-        <div class="mb-4 border-b border-gray-700 pb-4 flex-shrink-0">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="grid gap-4"
+                style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 1rem;">
                 <div>
-                     <label for="song-description-editor" class="block text-gray-300 text-sm font-semibold mb-1">1. Song Description (for AI):</label>
-                     <textarea id="song-description-editor" rows="5" placeholder="e.g., A dreamy shoegaze track with ethereal vocals..." class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm"></textarea>
+                    <label for="song-description-editor" class="form-label">1. Song Description (for AI):</label>
+                    <textarea id="song-description-editor" rows="3"
+                        placeholder="e.g., A dreamy shoegaze track with ethereal vocals..."
+                        class="form-textarea"></textarea>
                 </div>
                 <div>
-                     <label for="language-selector" class="block text-gray-300 text-sm font-semibold mb-1">2. Email Language:</label>
-                     <select id="language-selector" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm h-[42px]">
-                         <option value="English" selected>English</option> <option value="Spanish">Spanish</option> <option value="French">French</option> <option value="German">German</option> <option value="Portuguese">Portuguese</option> <option value="Italian">Italian</option>
-                     </select>
-                     <div class="mt-2">
-                        <label for="email-limit-input" class="block text-gray-300 text-sm font-semibold mb-1">
-                            Max number of emails to send (Limit: 300):
-                        </label>
-                        <input type="number" id="email-limit-input" value="300" min="1" max="300"
-                               class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                    <label for="language-selector" class="form-label">2. Email Language:</label>
+                    <select id="language-selector" class="form-select">
+                        <option value="English" selected>English</option>
+                        <option value="Spanish">Spanish</option>
+                        <option value="French">French</option>
+                        <option value="German">German</option>
+                        <option value="Portuguese">Portuguese</option>
+                        <option value="Italian">Italian</option>
+                    </select>
+
+                    <div style="margin-top: 1rem;">
+                        <label for="email-limit-input" class="form-label">Max emails (Limit: 300):</label>
+                        <input type="number" id="email-limit-input" value="300" min="1" max="300" class="form-input">
                     </div>
-                    
-                    <div class="mt-2">
-                       <label for="bcc-email-input" class="block text-gray-300 text-sm font-semibold mb-1">Send a copy (BCC) to (optional):</label>
-                       <input type="email" id="bcc-email-input" placeholder="your.verification.email@example.com" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+
+                    <div style="margin-top: 1rem;">
+                        <label for="bcc-email-input" class="form-label">BCC (optional):</label>
+                        <input type="email" id="bcc-email-input" placeholder="your.email@example.com"
+                            class="form-input">
                     </div>
-                    
                 </div>
             </div>
-            <button type="button" id="generate-email-button" class="w-full md:w-1/2 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition duration-200 disabled:opacity-50 disabled:cursor-wait">
-                 <span class="button-text">Generate Template & Preview</span>
-                 <span class="button-loading animate-pulse hidden">Generating...</span>
+
+            <button type="button" id="generate-email-button" class="btn btn-primary"
+                style="width: 100%; max-width: 300px; margin: 0 auto; display: flex;">
+                <span class="button-text">Generate Template & Preview</span>
+                <span class="button-loading animate-spin hidden">Generating...</span>
             </button>
         </div>
-        <div id="email-preview-edit-section" class="hidden flex-grow min-h-0 overflow-hidden flex flex-col">
-            <p class="text-sm text-gray-400 mb-1 flex-shrink-0">4. Review & Edit the generated template below.</p>
-            <p class="text-xs text-yellow-400 mb-4 text-center flex-shrink-0">
-                <strong class="font-semibold">Important:</strong>  Emails will be sent with randomized phrasing to improve deliverability. Sending is rate-limited (25-60s delay per email).
+
+        <div id="email-preview-edit-section" class="hidden"
+            style="flex-grow: 1; overflow: hidden; display: flex; flex-direction: column; padding: 1.5rem;">
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem;">4. Review & Edit the
+                generated template below.</p>
+            <p style="font-size: 0.8rem; color: var(--warning); text-align: center; margin-bottom: 1rem;">
+                <strong>Important:</strong> Emails are randomized and rate-limited.
             </p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow min-h-0 overflow-y-auto pr-2 custom-scrollbar">
+
+            <div class="grid gap-6"
+                style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); flex-grow: 1; min-height: 0; overflow-y: auto;">
                 <div class="flex flex-col">
-                    <label for="template-body-editor" class="block text-gray-300 text-sm font-semibold mb-2">Editable Template Body:</label>
-                    <textarea id="template-body-editor" class="w-full h-full flex-grow p-3 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm font-mono resize-none"></textarea>
+                    <label for="template-body-editor" class="form-label">Editable Template Body:</label>
+                    <textarea id="template-body-editor" class="form-textarea"
+                        style="flex-grow: 1; font-family: monospace; resize: none;"></textarea>
                 </div>
                 <div class="flex flex-col">
-                    <div class="mb-4 flex-shrink-0">
-                        <label for="preview-subject-editor" class="block text-gray-300 text-sm font-semibold mb-1">Editable Subject Line:</label>
-                        <input type="text" id="preview-subject-editor" class="w-full p-2 bg-gray-900 border border-gray-600 rounded-md focus:ring-purple-500 focus:border-purple-500 text-white text-sm">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="preview-subject-editor" class="form-label">Editable Subject Line:</label>
+                        <input type="text" id="preview-subject-editor" class="form-input">
                     </div>
-                    <div class="flex-grow min-h-0 flex flex-col">
-                         <strong class="block text-gray-300 text-sm font-semibold mb-1 flex-shrink-0">Preview (Using First Playlist):</strong>
-                         <div class="p-3 bg-gray-700 rounded border border-gray-600 flex-grow overflow-y-auto custom-scrollbar">
-                             <pre id="preview-body" class="text-sm text-gray-100 whitespace-pre-wrap min-h-[100px]"></pre>
-                         </div>
+                    <div class="flex flex-col flex-grow">
+                        <strong class="form-label">Preview:</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: var(--radius-md); flex-grow: 1; overflow-y: auto;"
+                            class="custom-scrollbar">
+                            <pre id="preview-body"
+                                style="font-size: 0.9rem; white-space: pre-wrap; font-family: inherit;"></pre>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="mt-4 pt-4 border-t border-gray-600 flex justify-end space-x-4 flex-shrink-0">
-            <button type="button" id="cancel-email-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition duration-200">Cancel</button>
-            <button type="button" id="confirm-send-button" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition duration-200 hidden disabled:opacity-50">
-                Confirm & Send All
-            </button>
+
+        <div
+            style="padding: 1rem; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: flex-end; gap: 1rem;">
+            <button type="button" id="cancel-email-button" class="btn btn-secondary">Cancel</button>
+            <button type="button" id="confirm-send-button" class="btn hidden"
+                style="background-color: var(--accent-purple); color: white;">Confirm & Send All</button>
         </div>
     </div>
 </div>
 
-{# --- Playlist Download Modal (with Contacted column) --- #}
-<div id="download-playlist-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-600">
-        <h3 class="text-xl font-bold mb-4 text-center text-green-300">Download Playlist Results</h3>
-        <p class="text-sm text-gray-400 text-center mb-6">Select the data columns you want to include in your export file.</p>
+{# Download Modal #}
+<div id="download-playlist-modal" class="hidden"
+    style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card" style="width: 100%; max-width: 500px;">
+        <h3 style="text-align: center; color: var(--success); margin-bottom: 1rem;">Download Results</h3>
+        <p style="text-align: center; color: var(--text-muted); margin-bottom: 1.5rem;">Select columns to export.</p>
+
         <form id="download-playlist-form">
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Playlist Name</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="url" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Spotify URL</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="owner_name" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Curator Name</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="email" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Curator Email</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="followers" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Followers</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="tracks_total" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Total Tracks</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="description" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Description</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="found_by" class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Found By Keyword</span></label>
-                <label class="flex items-center bg-gray-700 p-3 rounded-md hover:bg-gray-600 cursor-pointer"><input type="checkbox" name="columns" value="contacted" checked class="h-4 w-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-500"><span class="ml-3 text-gray-200">Contacted</span></label>
+            <div class="grid gap-2" style="grid-template-columns: 1fr 1fr;">
+                <label class="song-item-label"><input type="checkbox" name="columns" value="name" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Playlist Name</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="url" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Spotify URL</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="owner_name" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Curator Name</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="email" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Curator Email</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="followers" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Followers</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="tracks_total"
+                        class="hidden"><span style="margin-left: 0.5rem;">Total Tracks</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="description"
+                        class="hidden"><span style="margin-left: 0.5rem;">Description</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="found_by"
+                        class="hidden"><span style="margin-left: 0.5rem;">Found By</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
+                <label class="song-item-label"><input type="checkbox" name="columns" value="contacted" checked
+                        class="hidden"><span style="margin-left: 0.5rem;">Contacted</span>
+                    <div class="radio-indicator" style="border-radius: 4px;">✔</div>
+                </label>
             </div>
-            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end gap-3">
-                <button type="button" id="cancel-download-button" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded">Cancel</button>
-                <button type="button" data-format="csv" class="download-playlist-btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">Export as CSV</button>
-                <button type="button" data-format="xlsx" class="download-playlist-btn px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded">Export as XLSX</button>
+
+            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 1rem;">
+                <button type="button" id="cancel-download-button" class="btn btn-secondary">Cancel</button>
+                <button type="button" data-format="csv" class="download-playlist-btn btn btn-primary">Export
+                    CSV</button>
+                <button type="button" data-format="xlsx" class="download-playlist-btn btn"
+                    style="background-color: var(--success); color: white;">Export XLSX</button>
             </div>
         </form>
     </div>
 </div>
 
-{# Link back to general search page #}
 <div class="text-center mt-10">
-    <a href="{{ url_for('main.search_artist') }}" class="inline-block px-6 py-2 bg-gray-600 rounded text-lg font-semibold hover:bg-gray-500 transition duration-300">
+    <a href="{{ url_for('main.search_artist') }}" class="btn btn-secondary">
         ← Back to Artist Search
     </a>
 </div>
 {% endblock %}
 
-{# --- JavaScript --- #}
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script>
-    // --- Global State Variables ---
-    const currentArtistId = {{ artist_id | tojson }};
-    let allFoundPlaylists = []; // Master list of all playlists found in a search
-    let emailContentVariations = {};
-
-    // --- Helper Function to get currently visible playlists ---
-    function getVisiblePlaylists() {
-        const visiblePlaylistIds = new Set();
-        document.querySelectorAll('.playlist-card').forEach(card => {
-            if (card.style.display !== 'none') {
-                visiblePlaylistIds.add(card.dataset.playlistId);
-            }
-        });
-        return allFoundPlaylists.filter(p => visiblePlaylistIds.has(p.id));
-    }
-
-    // --- UI Feedback Functions for Initial Search ---
-    function updateProgress(percentage, statusText) {
-        const progressBar = document.getElementById('progress-bar');
-        const progressStatus = document.getElementById('progress-status');
-        const container = document.getElementById('progress-container');
-        if (container) container.style.display = 'block';
-        if (progressBar) progressBar.style.width = percentage + '%';
-        const displayStatus = statusText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        if (progressStatus) {
-             progressStatus.innerHTML = `<span class="font-semibold text-green-400">${displayStatus}</span> (${percentage}%)`;
-        }
-    }
-
-    function hideProgress() {
-        const progressContainer = document.getElementById('progress-container');
-        if (progressContainer) progressContainer.style.display = 'none';
-        const findBtn = document.getElementById('find-playlists-button');
-        if (findBtn) { 
-            findBtn.disabled = false; 
-            const buttonText = findBtn.querySelector('.button-text');
-            const buttonLoading = findBtn.querySelector('.button-loading');
-            if (buttonText) buttonText.classList.remove('hidden');
-            if (buttonLoading) buttonLoading.classList.add('hidden');
-        }
-    }
-
-    function showSearchError(errorMessage) {
-        hideProgress();
-        const resultsContainer = document.getElementById('playlist-results-container');
-        const displayError = errorMessage.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        if(resultsContainer) {
-             resultsContainer.innerHTML = `
-                <div class="text-center p-6 bg-red-900 border border-red-700 rounded-lg shadow-xl">
-                    <h3 class="text-xl font-semibold mb-2 text-red-100">Search Error</h3>
-                    <p class="text-red-200">${displayError}</p>
-                </div>`;
-        }
-        document.title = "Playlist Search Error for {{ artist_name | e }}";
-        const postSearchActions = document.getElementById('post-search-actions');
-        if (postSearchActions) postSearchActions.classList.add('hidden');
-    }
-
-    function updateKeywordsDisplay(keywords) {
-        const displayArea = document.getElementById('keywords-display-area');
-        const listSpan = document.getElementById('keywords-list');
-        if (displayArea && listSpan && keywords && keywords.length > 0) {
-            listSpan.textContent = keywords.join(', ');
-            displayArea.style.display = 'block';
-        } else if (displayArea) {
-            displayArea.style.display = 'none';
-        }
-    }
-
-    // --- Core Data Injection & UI Setup ---
-    function injectResultsAndData(resultsHtml, playlistData) {
-        const resultsContainer = document.getElementById('playlist-results-container');
-        if (resultsContainer) {
-            resultsContainer.innerHTML = resultsHtml;
-        }
-        
-        allFoundPlaylists = playlistData || [];
-
-        updateActionButtons();
-
-        if (allFoundPlaylists.length > 0) {
-            setupAiSmartSearch();
-            updatePlaylistCount();
-        }
-    }
-
-    function updateActionButtons() {
-        const actionsContainer = document.getElementById('post-search-actions');
-        if (actionsContainer && allFoundPlaylists && allFoundPlaylists.length > 0) {
-             actionsContainer.classList.remove('hidden');
-        } else if (actionsContainer) {
-             actionsContainer.classList.add('hidden');
-        }
-    }
-
-    // --- AI Smart Filter Logic ---
-    function setupAiSmartSearch() {
-        const searchInput = document.getElementById('ai-smart-search');
-        const applyButton = document.getElementById('ai-filter-button');
-        const statusEl = document.getElementById('ai-filter-status');
-
-        if (!searchInput || !applyButton || !statusEl) return;
-
-        const applyFilter = async () => {
-            const query = searchInput.value.trim();
-            if (!query) {
-                document.querySelectorAll('.playlist-card').forEach(card => card.style.display = 'flex');
-                updatePlaylistCount();
-                statusEl.textContent = "Filter cleared.";
-                return;
-            }
-
-            const btnText = applyButton.querySelector('.button-text');
-            const btnLoading = applyButton.querySelector('.button-loading');
-            applyButton.disabled = true;
-            btnText.classList.add('hidden');
-            btnLoading.classList.remove('hidden');
-            statusEl.textContent = "AI is analyzing your results...";
-            statusEl.classList.remove('text-red-400');
-
-            try {
-                const response = await fetch("{{ url_for('playlists.filter_playlists_ai') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ query: query, playlists: allFoundPlaylists })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || `Server error ${response.status}`);
-                }
-
-                const result = await response.json();
-                const matchingIds = new Set(result.playlist_ids || []);
-                let visibleCount = 0;
-
-                document.querySelectorAll('.playlist-card').forEach(card => {
-                    if (matchingIds.has(card.dataset.playlistId)) {
-                        card.style.display = 'flex';
-                        visibleCount++;
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
-                
-                updatePlaylistCount(visibleCount);
-                statusEl.textContent = `AI filter applied. Found ${visibleCount} matching playlists.`;
-
-            } catch (error) {
-                console.error("AI Filter Error:", error);
-                statusEl.textContent = `Error: ${error.message}`;
-                statusEl.classList.add('text-red-400');
-            } finally {
-                applyButton.disabled = false;
-                btnText.classList.remove('hidden');
-                btnLoading.classList.add('hidden');
-            }
-        };
-
-        applyButton.addEventListener('click', applyFilter);
-        searchInput.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                applyFilter();
-            }
-        });
-    }
-
-    function updatePlaylistCount(visibleCount = null) {
-        const countDisplay = document.getElementById('playlist-count-display');
-        if (!countDisplay) return;
-        const totalCount = allFoundPlaylists.length;
-        const currentVisible = visibleCount !== null ? visibleCount : getVisiblePlaylists().length;
-        
-        if (currentVisible === totalCount) {
-             countDisplay.textContent = `Showing all ${totalCount} playlists.`;
-        } else {
-             countDisplay.textContent = `Showing ${currentVisible} of ${totalCount} playlists matching your filter.`;
-        }
-    }
-
-    // --- Email Modal Logic ---
-    let exampleCuratorName = '';
-    let examplePlaylistName = '';
-
-    function showEmailOverlay() {
-        const overlay = document.getElementById('email-overlay');
-        document.getElementById('song-description-editor').value = '';
-        document.getElementById('language-selector').value = 'English';
-        document.getElementById('bcc-email-input').value = '';
-        document.getElementById('email-preview-edit-section').classList.add('hidden');
-        const generateBtn = document.getElementById('generate-email-button');
-        generateBtn.disabled = false;
-        generateBtn.querySelector('.button-text').classList.remove('hidden');
-        generateBtn.querySelector('.button-loading').classList.add('hidden');
-        document.getElementById('confirm-send-button').classList.add('hidden');
-        document.getElementById('confirm-send-button').disabled = true;
-
-        if (overlay) overlay.classList.remove('hidden');
-    }
-
-    function generateEmailAction() {
-        const subjectEditorEl = document.getElementById('preview-subject-editor');
-        const previewBodyEl = document.getElementById('preview-body');
-        const templateEditorEl = document.getElementById('template-body-editor');
-        const descriptionEditor = document.getElementById('song-description-editor');
-        const langSelector = document.getElementById('language-selector');
-        const generateBtn = document.getElementById('generate-email-button');
-        const sendBtn = document.getElementById('confirm-send-button');
-        const previewEditSection = document.getElementById('email-preview-edit-section');
-        const selectedTrackInput = document.querySelector('input[name="selected_track_id"]:checked');
-        
-        const loadingText = generateBtn.querySelector('.button-loading');
-        const buttonText = generateBtn.querySelector('.button-text');
-        const language = langSelector.value;
-
-        if (!selectedTrackInput) {
-            alert('Please select a track first.');
-            return;
-        }
-        const songDescription = descriptionEditor.value.trim();
-        if (!songDescription) {
-            alert('Please enter a song description for the AI to use.');
-            descriptionEditor.focus();
-            return;
-        }
-
-        const visiblePlaylists = getVisiblePlaylists();
-        const firstPlaylist = visiblePlaylists.find(p => p && p.email && p.email.includes('@'));
-        if (!firstPlaylist) {
-            alert("No contactable playlists are visible with the current filter. Cannot generate a preview.");
-            return;
-        }
-
-        generateBtn.disabled = true;
-        loadingText.classList.remove('hidden');
-        buttonText.classList.add('hidden');
-        previewEditSection.classList.add('hidden');
-        sendBtn.classList.add('hidden');
-        sendBtn.disabled = true;
-
-        fetch("{{ url_for('playlists.generate_preview_email_route') }}", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({
-                track_id: selectedTrackInput.value,
-                song_description: songDescription,
-                language: language,
-                playlist: firstPlaylist
-            })
-        })
-        .then(response => response.ok ? response.json() : response.json().then(err => Promise.reject(err)))
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-            subjectEditorEl.value = data.subject || '';
-            previewBodyEl.textContent = data.preview_body || '';
-            templateEditorEl.value = data.template_body || '';
-            emailContentVariations = data.variations || {}; 
-            previewEditSection.classList.remove('hidden');
-            sendBtn.classList.remove('hidden');
-            sendBtn.disabled = false;
-        })
-        .catch(error => {
-            console.error("Error fetching email preview:", error);
-            subjectEditorEl.value = 'Error';
-            previewBodyEl.textContent = `Failed to generate: ${error.message || 'Unknown error'}`;
-            templateEditorEl.value = `An error occurred: ${error.message || 'Unknown error'}`;
-        })
-        .finally(() => {
-            generateBtn.disabled = false;
-            loadingText.classList.add('hidden');
-            buttonText.classList.remove('hidden');
-        });
-    }
-
-    function updateLivePreview() {
-        const template = document.getElementById('template-body-editor').value;
-        const preview = template
-            .replace(/\{\{\s*curator_name\s*\}\}/g, exampleCuratorName)
-            .replace(/\{\{\s*playlist_name\s*\}\}/g, examplePlaylistName);
-        document.getElementById('preview-body').textContent = preview;
-    }
-
-    function cancelEmailSend() {
-        document.getElementById('email-overlay').classList.add('hidden');
-    }
-
-    function confirmAndSendEmails() {
-        const emailLimitInput = document.getElementById('email-limit-input');
-        const editedSubject = document.getElementById('preview-subject-editor').value.trim();
-        const bccEmail = document.getElementById('bcc-email-input').value.trim();
-        const editedTemplateBody = document.getElementById('template-body-editor').value.trim();
-        const trackIdInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const contactButton = document.getElementById('contact-curators-button');
-        const emailLog = document.getElementById('email-log');
-
-        if (!trackIdInput) {
-            alert("Error: A track is not selected. Please re-select a track.");
-            return;
-        }
-        const trackId = trackIdInput.value;
-
-        let emailLimit = parseInt(emailLimitInput.value, 10);
-        if (isNaN(emailLimit) || emailLimit < 1) {
-            alert("Please enter a valid number for the email limit (1 or more).");
-            emailLimitInput.focus();
-            return;
-        }
-        if (emailLimit > 300) emailLimit = 300;
-
-        if (!editedSubject || !editedTemplateBody) {
-            alert("The subject and the template body cannot be empty.");
-            return;
-        }
-        if (Object.keys(emailContentVariations).length === 0) {
-            alert("Email variations have not been generated. Please click 'Generate Template & Preview' first.");
-            return;
-        }
-
-        const allContactablePlaylists = getVisiblePlaylists().filter(p => p && p.email && p.email.includes('@'));
-        if (allContactablePlaylists.length === 0) {
-            alert("There are no contactable playlists in the current view to send emails to.");
-            return;
-        }
-
-        const isLimited = allContactablePlaylists.length > emailLimit;
-        const playlistsToContact = allContactablePlaylists.slice(0, emailLimit);
-
-        const confirmationMessage = `You are about to send emails to ${playlistsToContact.length} currently visible contactable playlists.${isLimited ? ` (Limited from ${allContactablePlaylists.length} total)` : ''}\n\nContinue?`;
-        if (!confirm(confirmationMessage)) {
-            return;
-        }
-        
-        cancelEmailSend();
-        contactButton.disabled = true;
-        contactButton.innerHTML = '<span class="animate-pulse">Sending Emails...</span>';
-        emailLog.textContent = `Initializing email process for ${playlistsToContact.length} playlists...\n`;
-        document.getElementById('email-status-container').style.display = 'block';
-
-        fetch("{{ url_for('playlists.send_emails_route') }}", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-            body: JSON.stringify({
-                track_id: trackId,
-                playlists: playlistsToContact,
-                subject: editedSubject,
-                variations: emailContentVariations,
-                template_body: editedTemplateBody,
-                bcc_email: bccEmail
-            })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error(`Server error: ${response.status}`);
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            
-            function processStream({ done, value }) {
-                if (done) {
-                    contactButton.disabled = false;
-                    contactButton.innerHTML = 'Contact Curators...';
-                    return;
-                }
-                const chunk = decoder.decode(value, { stream: true });
-                
-                const lines = chunk.split('\n\n');
-                lines.forEach(line => {
-                    if (line.startsWith('data: ')) {
-                        emailLog.textContent += line.substring(6).trim() + '\n';
-                    }
-                });
-
-                emailLog.scrollTop = emailLog.scrollHeight;
-                reader.read().then(processStream);
-            }
-            reader.read().then(processStream);
-        })
-        .catch(error => {
-            console.error("Error during email sending stream:", error);
-            emailLog.textContent += `\n❌ Network or processing error: ${error.message}\n`;
-            contactButton.disabled = false;
-            contactButton.innerHTML = 'Contact Curators...';
-        });
-    }
-
-    // --- Playlist Download Modal Logic ---
-    function showPlaylistDownloadModal() {
-        document.getElementById('download-playlist-modal').classList.remove('hidden');
-    }
-
-    function hidePlaylistDownloadModal() {
-        document.getElementById('download-playlist-modal').classList.add('hidden');
-    }
-
-    function generateAndDownloadFile(format) {
-         const playlistsToDownload = getVisiblePlaylists();
-        if (playlistsToDownload.length === 0) {
-            alert("There are no playlists in the current view to download."); return;
-        }
-
-        const selectedColumns = Array.from(document.querySelectorAll('#download-playlist-form input[name="columns"]:checked')).map(cb => cb.value);
-        if (selectedColumns.length === 0) {
-            alert('Please select at least one column to export.'); return;
-        }
-        
-        const columnHeaders = {
-            name: 'Playlist Name', url: 'Spotify URL', owner_name: 'Curator Name', email: 'Curator Email',
-            followers: 'Followers', tracks_total: 'Total Tracks', description: 'Description', 
-            found_by: 'Found By Keyword', contacted: 'Contacted'
-        };
-        
-        const dataForExport = playlistsToDownload.map(pl => {
-            let row = {};
-            selectedColumns.forEach(colKey => {
-                let value = pl[colKey];
-                if (colKey === 'contacted') {
-                    value = pl.contacted || 0;
-                }
-                if (Array.isArray(value)) value = value.join(', ');
-                row[columnHeaders[colKey]] = value ?? '';
-            });
-            return row;
-        });
-
-        const trackNameInput = document.querySelector('input[name="selected_track_id"]:checked');
-        const trackName = trackNameInput ? trackNameInput.closest('.song-item-label').dataset.trackName : 'selected_track';
-        const safeTrackName = trackName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const filename = `playlists_for_${safeTrackName}.${format}`;
-
-        let blob;
-        if (format === 'csv') {
-            const csvContent = convertToCSV(dataForExport);
-            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        } else {
-            const worksheet = XLSX.utils.json_to_sheet(dataForExport);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Playlists');
-            const xlsxData = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheet.sheet' });
-        }
-        
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        hidePlaylistDownloadModal();
-    }
-
-    function convertToCSV(objArray) {
-        if (objArray.length === 0) return "";
-        const headers = Object.keys(objArray[0]);
-        const csvRows = [headers.join(',')];
-        for (const row of objArray) {
-            const values = headers.map(header => {
-                let value = String(row[header]);
-                if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-                    value = '"' + value.replace(/"/g, '""') + '"';
-                }
-                return value;
-            });
-            csvRows.push(values.join(','));
-        }
-        return csvRows.join('\r\n');
-    }
-
-    // --- Upload Logic ---
-    function setupUploadFeature() {
-        const fileInput = document.getElementById('playlist-upload-input');
-        const uploadStatus = document.getElementById('upload-status');
-        const uploadLabel = document.getElementById('upload-label-text');
-        
-        if (!fileInput) return;
-
-        fileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            if (!file.name.match(/\.(xlsx|xls)$/i)) {
-                uploadStatus.textContent = "Error: Please select an Excel file.";
-                uploadStatus.classList.add('text-red-400');
-                fileInput.value = '';
-                return;
-            }
-
-            uploadStatus.textContent = `Processing ${file.name}...`;
-            uploadStatus.classList.remove('text-red-400');
-            uploadLabel.parentElement.classList.add('opacity-50', 'pointer-events-none');
-            
-            const formData = new FormData();
-            formData.append('playlist_file', file);
-            
-            try {
-                const response = await fetch(`{{ url_for('playlists.upload_playlists', artist_id=artist_id) }}`, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || `Server error: ${response.status}`);
-                
-                const selectedTrackName = "Playlists from Uploaded File";
-                document.title = `Playlist Results for ${selectedTrackName}`;
-                
-                const resultsHtml = `
-                    <hr class="border-gray-700 my-8">
-                    <h2 class="text-2xl font-bold mb-6 text-center">Playlist Results from "<span class="text-green-400">${selectedTrackName}</span>"</h2>
-                `;
-                const resultsContainer = document.getElementById('playlist-results-container');
-                resultsContainer.innerHTML = resultsHtml;
-
-                injectResultsAndData(
-                    await buildPlaylistsHtml(result.playlists),
-                    result.playlists
-                );
-                
-                uploadStatus.textContent = `Successfully loaded ${result.playlists.length} playlists.`;
-
-            } catch (error) {
-                console.error("Upload error:", error);
-                uploadStatus.textContent = `Error: ${error.message}`;
-                uploadStatus.classList.add('text-red-400');
-            } finally {
-                uploadLabel.parentElement.classList.remove('opacity-50', 'pointer-events-none');
-                fileInput.value = '';
-            }
-        });
-    }
-
-    async function buildPlaylistsHtml(playlists) {
-        if (!playlists || playlists.length === 0) {
-            return `<div class="text-center p-6 bg-gray-700 rounded-lg shadow">
-                        <h3 class="text-xl font-semibold mb-2">No Playlists Loaded</h3>
-                        <p class="text-gray-400">The uploaded file contained no valid playlists to display after filtering.</p>
-                    </div>`;
-        }
-        const aiFilterHtml = `
-            <div class="mb-4 max-w-md mx-auto">
-                <label for="ai-smart-search" class="block text-sm font-semibold text-gray-300 mb-2 text-center">✨ AI Smart Filter</label>
-                <div class="flex gap-2">
-                    <input type="text" id="ai-smart-search" placeholder="e.g., chill indie pop with female vocals" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 text-white placeholder-gray-500">
-                    <button id="ai-filter-button" type="button" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait">
-                        <span class="button-text">Apply</span>
-                        <span class="button-loading hidden animate-spin">Applying...</span>
-                    </button>
-                </div>
-                <p id="ai-filter-status" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
-            </div>`;
-
-        const playlistCardsHtml = playlists.map(playlist => `
-            <div class="playlist-card bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600"
-                 data-playlist-id="${playlist.id}"
-                 data-found-by="${(playlist.found_by || []).map(k => k.toLowerCase()).join(',')}">
-                <div class="p-3 border-b border-gray-600">
-                     <a href="${playlist.url || '#'}" target="_blank" rel="noopener noreferrer" class="text-base font-semibold text-green-300 hover:text-green-200 hover:underline truncate block" title="${playlist.name || 'N/A'}">${playlist.name || 'N/A'}</a>
-                     <p class="text-xs text-gray-400 mt-1">By: <span class="text-gray-200">${playlist.owner_name || 'N/A'}</span></p>
-                </div>
-                <div class="p-3 flex flex-col flex-grow text-xs">
-                    ${playlist.description ? `<p class="text-gray-300 mb-2 line-clamp-2 text-xs" title="${playlist.description}">${playlist.description}</p>` : ''}
-                    <div class="mt-auto pt-2 space-y-1 border-t border-gray-600">
-                        <div class="flex justify-between"><span class="text-gray-400">Followers:</span><span class="font-medium text-gray-200">${playlist.followers || 'N/A'}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Tracks:</span><span class="font-medium text-gray-200">${playlist.tracks_total || 'N/A'}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Email:</span>${playlist.email ? `<a href="mailto:${playlist.email}" class="font-medium text-blue-400 hover:underline truncate" title="${playlist.email}">${playlist.email}</a>` : '<span class="font-medium text-gray-500 italic">N/A</span>'}</div>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        return `${aiFilterHtml}
-                <p class="text-sm text-center text-gray-400 mb-4" id="playlist-count-display"></p>
-                <div id="playlists-grid" class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">${playlistCardsHtml}</div>
-                <p class="text-center text-xs text-gray-500 mt-4 italic">(Loaded ${playlists.length} playlists from file)</p>`;
-    }
-
-    // --- Main Entry Point: DOMContentLoaded ---
-    document.addEventListener('DOMContentLoaded', () => {
-        // Event listeners for main page actions
-        document.getElementById('contact-curators-button').addEventListener('click', showEmailOverlay);
-        document.getElementById('show-download-modal-btn').addEventListener('click', showPlaylistDownloadModal);
-        
-        // Event listeners for Email Modal
-        document.getElementById('generate-email-button').addEventListener('click', generateEmailAction);
-        document.getElementById('confirm-send-button').addEventListener('click', confirmAndSendEmails);
-        document.getElementById('cancel-email-button').addEventListener('click', cancelEmailSend);
-        document.getElementById('template-body-editor').addEventListener('input', updateLivePreview);
-
-        // Event listeners for Download Modal
-        document.querySelectorAll('.download-playlist-btn').forEach(button => {
-            button.addEventListener('click', () => generateAndDownloadFile(button.dataset.format));
-        });
-        document.getElementById('cancel-download-button').addEventListener('click', hidePlaylistDownloadModal);
-
-        // --- JS FIX: Listener for the initial search form ---
-        const findForm = document.getElementById('playlist-finder-form');
-        const findButton = document.getElementById('find-playlists-button');
-        
-        if (findForm && findButton) {
-            findForm.addEventListener('submit', function(event) {
-                // 1. Validation
-                if (!findForm.querySelector('input[name="selected_track_id"]:checked')) {
-                    alert("Please select a track before finding playlists.");
-                    event.preventDefault(); // Stop the form submission
-                    return;
-                }
-                
-                // 2. Set loading state if validation passes
-                const buttonText = findButton.querySelector('.button-text');
-                const buttonLoading = findButton.querySelector('.button-loading');
-                
-                findButton.disabled = true;
-                if (buttonText) buttonText.classList.add('hidden');
-                if (buttonLoading) buttonLoading.classList.remove('hidden');
-                
-                // Allow the form to submit naturally to trigger the page stream
-            });
-        }
-        
-        // --- Initialize the upload feature ---
-        setupUploadFeature();
-    });
-</script>
+<script src="{{ url_for('static', filename='js/playlist_finder.js') }}"></script>
 {% endblock %}
-
-{% block extra_css %}
-<style>
-    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #374151; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-    #template-body-editor { font-family: monospace; min-height: 200px; }
-    #email-preview-edit-section .grid > div { display: flex; flex-direction: column; }
-    #email-preview-edit-section .grid > div > div:last-child { flex-grow: 1; display: flex; flex-direction: column; }
-    #email-preview-edit-section .grid > div > div:last-child > div { flex-grow: 1; }
-</style>
-{% endblock %}
-{# --- END OF (CORRECTED & COMPLETE) FILE templates/playlist_finder_base.html --- #}
