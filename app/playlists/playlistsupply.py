@@ -62,11 +62,21 @@ def scrape_playlistsupply(search_term, user_email, authenticated_session):
          return []
 
     params = {'user_email': user_email, 'code': 'email', 'keyword': search_term}
-    target_endpoint = "https://playlistsupply.com/tool/timemachine_reloaded.php"
+    # FIX: Updated URL to include /libs/
+    target_endpoint = "https://playlistsupply.com/tool/libs/timemachine_reloaded.php"
     extracted_playlists = []
     response = None
     try:
-        response = authenticated_session.get(target_endpoint, params=params, timeout=45)
+        # FIX: Added headers to mimic AJAX request
+        headers = {
+            'Referer': 'https://playlistsupply.com/tool/search.php',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': '*/*',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        }
+        response = authenticated_session.get(target_endpoint, params=params, headers=headers, timeout=45)
         response.raise_for_status()
         response_text = response.text
         json_data = None
