@@ -3,70 +3,103 @@
 {# This template is a partial that gets injected into the main page. #}
 {% if search_performed %}
 
-    {# --- Results Section Header --- #}
-    <hr class="border-gray-700 my-8">
-    <h2 class="text-2xl font-bold mb-6 text-center">Playlist Results for "<span class="text-green-400">{{ selected_track_name or 'Selected Track' }}</span>"</h2>
+{# --- Results Section Header --- #}
+<div class="divider my-8"></div>
+<h2 class="text-center mb-6">Playlist Results for "<span style="color: var(--success);">{{ selected_track_name or
+        'Selected Track' }}</span>"</h2>
 
-    {# --- Handle Different Result States --- #}
-    {% if global_error %}
-        <div class="text-center p-6 bg-red-900 border border-red-700 rounded-lg shadow-xl">
-            <h3 class="text-xl font-semibold mb-2 text-red-100">Search Error</h3>
-            <p class="text-red-200">{{ global_error }}</p>
-        </div>
-    {% elif playlists is none %}
-        <div class="text-center p-6 bg-red-900 border border-red-700 rounded-lg shadow-xl">
-             <h3 class="text-xl font-semibold mb-2 text-red-100">Error</h3>
-             <p class="text-red-200">Could not retrieve playlist recommendations.</p>
-        </div>
-    {% elif not playlists %}
-        <div class="text-center p-6 bg-gray-700 rounded-lg shadow">
-            <h3 class="text-xl font-semibold mb-2">No Relevant Playlists Found</h3>
-            <p class="text-gray-400">No playlists found via PlaylistSupply for the keywords used.</p>
-        </div>
-    {% else %}
-        {# --- NEW: AI Smart Search Filter --- #}
-        <div class="mb-4 max-w-md mx-auto">
-            <label for="ai-smart-search" class="block text-sm font-semibold text-gray-300 mb-2 text-center">✨ AI Smart Filter</label>
-            <div class="flex gap-2">
-                <input type="text" id="ai-smart-search" placeholder="e.g., chill indie pop with female vocals"
-                       class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 text-white placeholder-gray-500">
-                <button id="ai-filter-button" type="button"
-                        class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-wait">
-                    <span class="button-text">Apply</span>
-                    <span class="button-loading hidden animate-spin">Applying...</span>
-                </button>
-            </div>
-            <p id="ai-filter-status" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
+{# --- Handle Different Result States --- #}
+{% if global_error %}
+<div class="status-message error mb-6">
+    <h3 class="font-bold mb-2">Search Error</h3>
+    <p>{{ global_error }}</p>
+</div>
+{% elif playlists is none %}
+<div class="status-message error mb-6">
+    <h3 class="font-bold mb-2">Error</h3>
+    <p>Could not retrieve playlist recommendations.</p>
+</div>
+{% elif not playlists %}
+<div class="status-message info mb-6">
+    <h3 class="font-bold mb-2">No Relevant Playlists Found</h3>
+    <p>No playlists found via PlaylistSupply for the keywords used.</p>
+</div>
+{% else %}
+{# --- NEW: AI Smart Search Filter --- #}
+<div class="card mb-6" style="max-width: 600px; margin-left: auto; margin-right: auto; padding: var(--spacing-md);">
+    <label for="ai-smart-search" class="form-label text-center mb-3" style="display: block;">✨ AI Smart Filter</label>
+    <div class="flex gap-2">
+        <input type="text" id="ai-smart-search" placeholder="e.g., chill indie pop with female vocals"
+            class="form-input" style="flex-grow: 1;">
+        <button id="ai-filter-button" type="button" class="btn btn-primary" style="white-space: nowrap;">
+            <span class="button-text">Apply</span>
+            <span class="button-loading hidden animate-spin">Applying...</span>
+        </button>
+    </div>
+    <p id="ai-filter-status" class="text-center text-secondary mt-2" style="font-size: 0.8rem; min-height: 1.2em;"></p>
+</div>
+
+{# --- Playlist Count Display --- #}
+<p class="text-center text-secondary mb-4" id="playlist-count-display"></p>
+
+{# --- Results Grid --- #}
+<div id="playlists-grid" class="grid-auto custom-scrollbar"
+    style="max-height: 70vh; overflow-y: auto; padding-right: 0.5rem; gap: var(--spacing-md);">
+    {% for playlist in playlists %}
+    <div class="playlist-card card"
+        style="display: flex; flex-direction: column; padding: 0; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);"
+        data-playlist-id="{{ playlist.id }}" data-found-by="{{ playlist.found_by | map('lower') | join(',') }}">
+
+        <div
+            style="padding: var(--spacing-md); border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02);">
+            <a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer"
+                class="font-bold hover:underline truncate block"
+                style="color: var(--success); font-size: 1.1rem; margin-bottom: 0.25rem;" title="{{ playlist.name }}">{{
+                playlist.name }}</a>
+            <p class="text-secondary" style="font-size: 0.85rem;">
+                By: <span style="color: var(--text-main);">{{ playlist.owner_name | default('N/A') }}</span>
+                {% if playlist.owner_url %}
+                <a href="{{ playlist.owner_url }}" target="_blank" rel="noopener noreferrer"
+                    style="color: var(--primary); margin-left: 0.25rem;">↗</a>
+                {% endif %}
+            </p>
         </div>
 
-        {# --- Playlist Count Display --- #}
-        <p class="text-sm text-center text-gray-400 mb-4" id="playlist-count-display"></p>
+        <div
+            style="padding: var(--spacing-md); flex-grow: 1; display: flex; flex-direction: column; font-size: 0.9rem;">
+            {% if playlist.description %}
+            <p class="text-secondary mb-3 line-clamp-2" style="font-size: 0.85rem;" title="{{ playlist.description }}">
+                {{ playlist.description }}</p>
+            {% endif %}
 
-        {# --- Results Grid --- #}
-        <div id="playlists-grid" class="grid grid-cols-1 md:grid-cols-1 gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
-            {% for playlist in playlists %}
-            <div class="playlist-card bg-gray-700 rounded-lg shadow-md overflow-hidden flex flex-col border border-gray-600"
-                 data-playlist-id="{{ playlist.id }}"
-                 data-found-by="{{ playlist.found_by | map('lower') | join(',') }}">
-                
-                <div class="p-3 border-b border-gray-600">
-                     <a href="{{ playlist.url }}" target="_blank" rel="noopener noreferrer" class="text-base font-semibold text-green-300 hover:text-green-200 hover:underline truncate block" title="{{ playlist.name }}">{{ playlist.name }}</a>
-                     <p class="text-xs text-gray-400 mt-1">By: <span class="text-gray-200">{{ playlist.owner_name | default('N/A') }}</span>{% if playlist.owner_url %}<a href="{{ playlist.owner_url }}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1">↗</a>{% endif %}</p>
+            <div class="mt-auto pt-3 space-y-2" style="border-top: 1px solid rgba(255,255,255,0.05);">
+                <div class="flex justify-between items-center">
+                    <span class="text-secondary">Followers:</span>
+                    <span class="font-medium" style="color: var(--text-main);">{{ playlist.followers | default('N/A')
+                        }}</span>
                 </div>
-                <div class="p-3 flex flex-col flex-grow text-xs">
-                    {% if playlist.description %}<p class="text-gray-300 mb-2 line-clamp-2 text-xs" title="{{ playlist.description }}">{{ playlist.description }}</p>{% endif %}
-                    <div class="mt-auto pt-2 space-y-1 border-t border-gray-600">
-                        <div class="flex justify-between"><span class="text-gray-400">Followers:</span><span class="font-medium text-gray-200">{{ playlist.followers | default('N/A') }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Tracks:</span><span class="font-medium text-gray-200">{{ playlist.tracks_total | default('N/A') }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Email:</span>{% if playlist.email %}<a href="mailto:{{ playlist.email }}" class="font-medium text-blue-400 hover:underline truncate" title="{{ playlist.email }}">{{ playlist.email }}</a>{% else %}<span class="font-medium text-gray-500 italic">N/A</span>{% endif %}</div>
-                    </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-secondary">Tracks:</span>
+                    <span class="font-medium" style="color: var(--text-main);">{{ playlist.tracks_total | default('N/A')
+                        }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-secondary">Email:</span>
+                    {% if playlist.email %}
+                    <a href="mailto:{{ playlist.email }}" class="font-medium truncate"
+                        style="color: var(--primary); max-width: 150px;" title="{{ playlist.email }}">{{ playlist.email
+                        }}</a>
+                    {% else %}
+                    <span class="text-muted italic">N/A</span>
+                    {% endif %}
                 </div>
             </div>
-            {% endfor %}
         </div>
-        <p class="text-center text-xs text-gray-500 mt-4 italic">(Found {{ playlists|length }} unique playlists{% if has_scrape_error %}, some searches may have failed{% endif %})</p>
-    {% endif %}
-
+    </div>
+    {% endfor %}
+</div>
+<p class="text-center text-secondary mt-4 italic" style="font-size: 0.85rem;">(Found {{ playlists|length }} unique
+    playlists{% if has_scrape_error %}, some searches may have failed{% endif %})</p>
 {% endif %}
 
-{# --- END OF FILE templates/playlist_finder_results.html --- #}
+{% endif %}
