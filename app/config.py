@@ -18,9 +18,9 @@ class Config:
     SPOTIPY_CLIENT_SECRET = os.environ.get('SPOTIPY_CLIENT_SECRET')
     SPOTIPY_CACHE_PATH = os.environ.get('SPOTIPY_CACHE_PATH') or ".spotifycache" # Cache path might still be used
 
-    # Gemini API Key
+    # Gemini API
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or "gemini-3-flash-preview"
+    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or "gemini-2.0-flash-lite"
 
     # PlaylistSupply Credentials (USE WITH EXTREME CAUTION)
     PLAYLIST_SUPPLY_USER = os.environ.get("PLAYLIST_SUPPLY_USER")

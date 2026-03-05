@@ -2,7 +2,6 @@ import os
 import time
 from flask import Flask
 from flask_session import Session
-import google.generativeai as genai
 from .config import Config
 
 # Initialize extensions but don't configure them here yet
@@ -16,15 +15,12 @@ def create_app(config_class=Config):
     # Initialize Flask extensions
     session_ext.init_app(app)
 
-    # Configure Gemini
-    if app.config['GEMINI_API_KEY']:
-        try:
-            genai.configure(api_key=app.config['GEMINI_API_KEY'])
-            print("Gemini API Key configured.")
-        except Exception as e:
-            print(f"Warning: Failed to configure Gemini: {e}")
+    import google.generativeai as genai
+    if app.config.get('GEMINI_API_KEY'):
+        genai.configure(api_key=app.config['GEMINI_API_KEY'])
+        print(f"Gemini configured: {app.config.get('GEMINI_MODEL_NAME')}")
     else:
-        print("Warning: GEMINI_API_KEY not found in environment variables.")
+        print("Warning: GEMINI_API_KEY not set.")
 
     # Register Blueprints
     from .main import main_bp

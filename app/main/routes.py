@@ -22,6 +22,19 @@ from ..lastfm.scraper import (
     scrape_lastfm_artist_stats,
 )
 
+def _ai_call(prompt: str) -> str:
+    """Call Gemini and return the text response."""
+    import google.generativeai as genai
+    api_key = current_app.config.get('GEMINI_API_KEY')
+    if not api_key:
+        raise RuntimeError('GEMINI_API_KEY not configured')
+    model_name = current_app.config.get('GEMINI_MODEL_NAME')
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name)
+    response = model.generate_content(prompt)
+    return response.text.strip() if response.text else ''
+
+
 _MARKET_REGIONS = {
     'North America': {'US', 'CA', 'MX'},
     'Latin America': {
@@ -126,11 +139,8 @@ def artist_intel(artist_id):
 
 
 def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, artist_labels, release_stats):
-    """Use Gemini to synthesize all available data into a professional artist profile."""
+    """Use Claude to synthesize all available data into a professional artist profile."""
     try:
-        import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
-        model = genai.GenerativeModel(model_name)
 
         followers = artist.get('followers', {}).get('total', 0) or 0
         genres = artist.get('genres', [])
@@ -168,8 +178,7 @@ Return exactly this JSON structure (all strings, use real data — NO filler phr
   "label_career": "1–2 sentences on their label history and what it signals about their deal structure or independence."
 }}"""
 
-        response = model.generate_content(prompt)
-        raw = response.text.strip() if response.text else None
+        raw = _ai_call(prompt)
         if not raw:
             return None
         # Strip accidental markdown fences
@@ -180,10 +189,9 @@ Return exactly this JSON structure (all strings, use real data — NO filler phr
         try:
             return _json.loads(raw)
         except Exception:
-            # Fallback: return as plain text so UI still shows something
             return raw
     except Exception as e:
-        print(f"[AI Bio] Gemini error: {e}")
+        print(f"[AI Bio] Claude error: {e}")
         return None
 
 
@@ -500,8 +508,6 @@ def label_pitch_api(artist_id):
     Generate a personalised pitch email for a specific label using Gemini.
     POST body: { label_name, label_type, label_country, label_artists, label_website }
     """
-    if not current_app.config.get('GEMINI_API_KEY'):
-        return jsonify({'error': 'AI not configured'}), 500
 
     sp = get_spotify_client_credentials_client()
     if not sp:
@@ -544,10 +550,6 @@ def label_pitch_api(artist_id):
         pass
 
     try:
-        import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
-        model = genai.GenerativeModel(model_name)
-
         roster_str = ', '.join(label_artists[:8]) if label_artists else 'unknown roster'
         prompt = f"""You are a professional music industry consultant writing a concise, compelling cold-pitch email from an artist to a record label.
 
@@ -579,11 +581,10 @@ Write a professional cold pitch email. Rules:
 
 Return ONLY the email (subject + body). No explanations."""
 
-        response = model.generate_content(prompt)
-        pitch_text = response.text.strip() if response.text else ''
+        pitch_text = _ai_call(prompt)
         return jsonify({'pitch': pitch_text})
     except Exception as e:
-        print(f"[LabelPitch] Gemini error: {e}")
+        print(f"[LabelPitch] Claude error: {e}")
         return jsonify({'error': f'Generation failed: {e}'}), 500
 
 
@@ -614,8 +615,6 @@ def marketing_strategy_api(artist_id):
     if not sp:
         return jsonify({'error': 'Spotify unavailable'}), 503
 
-    if not current_app.config.get('GEMINI_API_KEY'):
-        return jsonify({'error': 'AI not configured'}), 500
 
     try:
         artist = sp.artist(artist_id)
@@ -669,10 +668,6 @@ def marketing_strategy_api(artist_id):
         pass
 
     market_breakdown = _compute_market_breakdown(available_markets)
-
-    import google.generativeai as genai
-    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
-    model = genai.GenerativeModel(model_name)
 
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and growth marketing. You have worked with artists across all career stages and genres.
 
@@ -771,8 +766,7 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
 
     try:
         import re as re_module
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        text = _ai_call(prompt)
         # Strip any markdown code fences
         text = re_module.sub(r'^```(?:json)?\s*', '', text)
         text = re_module.sub(r'\s*```$', '', text)
@@ -780,7 +774,7 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
         strategy = json_module.loads(text)
         return jsonify({'strategy': strategy})
     except Exception as e:
-        print(f"[MarketingAPI] Gemini/parse error: {e}")
+        print(f"[MarketingAPI] Claude/parse error: {e}")
         traceback.print_exc()
         return jsonify({'error': f'Strategy generation failed: {e}'}), 500
 
