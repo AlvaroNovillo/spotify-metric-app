@@ -129,7 +129,7 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
     """Use Gemini to synthesize all available data into a professional artist profile."""
     try:
         import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
         model = genai.GenerativeModel(model_name)
 
         followers = artist.get('followers', {}).get('total', 0) or 0
@@ -532,7 +532,7 @@ def label_pitch_api(artist_id):
 
     try:
         import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
         model = genai.GenerativeModel(model_name)
 
         roster_str = ', '.join(label_artists[:8]) if label_artists else 'unknown roster'
@@ -658,7 +658,7 @@ def marketing_strategy_api(artist_id):
     market_breakdown = _compute_market_breakdown(available_markets)
 
     import google.generativeai as genai
-    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
+    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
     model = genai.GenerativeModel(model_name)
 
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and marketing. Generate a detailed, actionable marketing strategy.
