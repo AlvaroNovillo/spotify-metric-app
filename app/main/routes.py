@@ -129,7 +129,7 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
     """Use Gemini to synthesize all available data into a professional artist profile."""
     try:
         import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
         model = genai.GenerativeModel(model_name)
 
         followers = artist.get('followers', {}).get('total', 0) or 0
@@ -479,6 +479,99 @@ def label_contacts_api(artist_id):
     return jsonify({'labels': sorted_labels})
 
 
+@main_bp.route('/api/artist/<artist_id>/label-pitch', methods=['POST'])
+def label_pitch_api(artist_id):
+    """
+    Generate a personalised pitch email for a specific label using Gemini.
+    POST body: { label_name, label_type, label_country, label_artists, label_website }
+    """
+    if not current_app.config.get('GEMINI_API_KEY'):
+        return jsonify({'error': 'AI not configured'}), 500
+
+    sp = get_spotify_client_credentials_client()
+    if not sp:
+        return jsonify({'error': 'Spotify unavailable'}), 503
+
+    data = request.get_json(silent=True) or {}
+    label_name = data.get('label_name', '')
+    label_type = data.get('label_type', '')
+    label_country = data.get('label_country', '')
+    label_artists = data.get('label_artists', [])
+    label_website = data.get('label_website', '')
+
+    if not label_name:
+        return jsonify({'error': 'label_name required'}), 400
+
+    try:
+        artist = sp.artist(artist_id)
+        if not artist:
+            return jsonify({'error': 'Artist not found'}), 404
+    except Exception:
+        return jsonify({'error': 'Artist not found'}), 404
+
+    artist_name = artist.get('name', '')
+    genres = artist.get('genres', [])
+    followers = (artist.get('followers') or {}).get('total', 0)
+    popularity = artist.get('popularity', 0)
+
+    lastfm_tags = []
+    try:
+        lastfm_tags = scrape_lastfm_tags(artist_name) or []
+    except Exception:
+        pass
+
+    release_stats_obj = {}
+    try:
+        simplified = sp.artist_albums(artist_id, album_type='album,single', limit=5).get('items', [])
+        from ..spotify.utils import calculate_release_stats
+        release_stats_obj = calculate_release_stats(simplified) or {}
+    except Exception:
+        pass
+
+    try:
+        import google.generativeai as genai
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+        model = genai.GenerativeModel(model_name)
+
+        roster_str = ', '.join(label_artists[:8]) if label_artists else 'unknown roster'
+        prompt = f"""You are a professional music industry consultant writing a concise, compelling cold-pitch email from an artist to a record label.
+
+ARTIST PROFILE:
+- Name: {artist_name}
+- Genres: {', '.join(genres) or 'Unknown'}
+- Last.fm Tags: {', '.join(lastfm_tags[:8]) or 'N/A'}
+- Spotify Followers: {followers:,}
+- Popularity Score: {popularity}/100
+- Active Since: {release_stats_obj.get('first_release_year', 'Unknown')}
+- Total Releases: {release_stats_obj.get('total_releases', 'N/A')}
+
+TARGET LABEL:
+- Name: {label_name}
+- Type: {label_type or 'Independent'}
+- Country: {label_country or 'Unknown'}
+- Known Roster: {roster_str}
+- Website: {label_website or 'Unknown'}
+
+Write a professional cold pitch email. Rules:
+1. Subject line first, then blank line, then email body
+2. Address the label by name, not generically
+3. Reference 1-2 specific artists from their roster to show you know the label
+4. Highlight the 2-3 most compelling data points from the artist profile
+5. Keep it under 200 words total
+6. End with a clear call to action
+7. Use [ARTIST NAME] as the signature placeholder
+8. Professional but not stiff — music industry tone
+
+Return ONLY the email (subject + body). No explanations."""
+
+        response = model.generate_content(prompt)
+        pitch_text = response.text.strip() if response.text else ''
+        return jsonify({'pitch': pitch_text})
+    except Exception as e:
+        print(f"[LabelPitch] Gemini error: {e}")
+        return jsonify({'error': f'Generation failed: {e}'}), 500
+
+
 @main_bp.route('/artist/<artist_id>/marketing')
 def artist_marketing(artist_id):
     """AI-generated comprehensive marketing strategy page."""
@@ -563,7 +656,7 @@ def marketing_strategy_api(artist_id):
     market_breakdown = _compute_market_breakdown(available_markets)
 
     import google.generativeai as genai
-    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
+    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
     model = genai.GenerativeModel(model_name)
 
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and marketing. Generate a detailed, actionable marketing strategy.

@@ -189,6 +189,54 @@
     </div>
 </div>
 
+{# ─── AI PITCH MODAL ─────────────────────────────────────────────────── #}
+<div id="pitch-modal" class="modal-overlay hidden">
+    <div class="modal-content pitch-modal-content">
+        <div class="modal-header">
+            <h3 id="pitch-modal-title">Generate Pitch</h3>
+            <button id="pitch-modal-close" class="modal-close-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="padding:1.25rem 1.5rem;">
+
+            <div id="pitch-modal-loading" class="loading-state" style="padding:2rem;">
+                <div class="loading-spinner"></div>
+                <p class="loading-msg">Writing your pitch...</p>
+                <p class="loading-submsg">Analysing label roster and artist profile</p>
+            </div>
+
+            <div id="pitch-modal-error" style="display:none; color:#ef4444; font-size:.875rem; padding:.5rem 0;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="pitch-modal-error-msg"></span>
+            </div>
+
+            <div id="pitch-modal-body" style="display:none;">
+                <div class="pitch-modal-label">
+                    <i class="fas fa-robot"></i> AI-generated pitch — review and personalise before sending
+                </div>
+                <textarea id="pitch-modal-text" class="pitch-modal-textarea" spellcheck="true"></textarea>
+                <div class="pitch-modal-tips">
+                    <strong>Before sending:</strong>
+                    <ul>
+                        <li>Replace [ARTIST NAME] with your name</li>
+                        <li>Add a specific recent track or project</li>
+                        <li>Include your EPK / streaming links</li>
+                        <li>Find the right A&R contact on their website or LinkedIn</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+        <div class="modal-footer" id="pitch-modal-footer-btns" style="display:none;">
+            <button id="pitch-copy-btn" class="btn btn-primary">
+                <i class="fas fa-copy"></i> Copy
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('pitch-modal').classList.add('hidden'); document.body.style.overflow='';">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -313,61 +361,211 @@
         });
 
     // ── Label rendering ───────────────────────────────────────────────
-    function renderLabelCard(label) {
-        const socialHtml = (label.social_links || []).slice(0, 4).map(s =>
+    let allLabels = [];
+
+    function contactScore(label) {
+        let s = 0;
+        if (label.website) s += 3;
+        if ((label.social_links || []).length) s += label.social_links.length;
+        if ((label.artists || []).length) s += 1;
+        return s;
+    }
+
+    function renderContactBar(label) {
+        const items = [];
+        if (label.website) items.push(`<span class="contact-chip contact-chip--web"><i class="fas fa-globe"></i> Website</span>`);
+        const socials = (label.social_links || []).slice(0, 4);
+        socials.forEach(s => items.push(`<span class="contact-chip"><i class="${s.icon}"></i> ${s.platform}</span>`));
+        if (!items.length) items.push(`<span class="contact-chip contact-chip--none"><i class="fas fa-exclamation-circle"></i> No contacts found</span>`);
+        return items.join('');
+    }
+
+    function renderLabelCard(label, index) {
+        const socialLinks = (label.social_links || []).slice(0, 5).map(s =>
             `<a href="${s.url}" target="_blank" rel="noopener noreferrer" class="label-social-btn" title="${s.platform}">
                 <i class="${s.icon}"></i>
             </a>`
         ).join('');
 
-        const artistsHtml = (label.artists || []).slice(0, 5).map(a =>
+        const artistsHtml = (label.artists || []).slice(0, 6).map(a =>
             `<span class="label-artist-tag">${a}</span>`
         ).join('');
 
         const typeHtml = label.type ? `<span class="label-type-badge">${label.type}</span>` : '';
         const countryHtml = label.country ? `<span class="label-country"><i class="fas fa-map-marker-alt"></i> ${label.country}</span>` : '';
+        const score = contactScore(label);
+        const scoreDots = [1,2,3].map(n =>
+            `<span class="contact-dot ${score >= n ? 'contact-dot--active' : ''}"></span>`
+        ).join('');
 
-        return `<div class="label-card ${label.website ? 'label-card--has-website' : ''}">
-            <div class="label-card-header">
-                <div class="label-card-title">
-                    <div class="label-icon-wrap"><i class="fas fa-building"></i></div>
-                    <div>
+        return `<div class="label-card ${label.website ? 'label-card--has-website' : ''}" data-label-index="${index}">
+            <div class="label-card-left">
+                <div class="label-rank">${index + 1}</div>
+            </div>
+            <div class="label-card-main">
+                <div class="label-card-header">
+                    <div class="label-card-title">
                         <h4 class="label-card-name">${label.name}</h4>
                         <div class="label-card-meta">${typeHtml}${countryHtml}</div>
                     </div>
+                    <div class="label-card-header-right">
+                        <div class="contact-score" title="Contact richness">
+                            ${scoreDots}
+                        </div>
+                    </div>
                 </div>
-                <div class="label-card-actions">
-                    ${socialHtml}
-                    ${label.website ? `<a href="${label.website}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary" title="Official website">
-                        <i class="fas fa-globe"></i> Website
-                    </a>` : ''}
+
+                <div class="label-contact-bar">${renderContactBar(label)}</div>
+
+                ${artistsHtml ? `<div class="label-artists-row">
+                    <span class="label-artists-label"><i class="fas fa-users"></i> Roster match:</span>
+                    ${artistsHtml}
+                </div>` : ''}
+
+                <div class="label-card-footer">
+                    <div class="label-card-actions">
+                        ${socialLinks}
+                        ${label.website ? `<a href="${label.website}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">
+                            <i class="fas fa-globe"></i> Visit
+                        </a>` : ''}
+                    </div>
+                    <button class="btn btn-sm btn-pitch-generate" data-label-index="${index}"
+                        title="Generate AI pitch email for this label">
+                        <i class="fas fa-magic"></i> Generate Pitch
+                    </button>
                 </div>
             </div>
-            ${artistsHtml ? `<div class="label-artists-row">
-                <span class="label-artists-label">Signs:</span>
-                ${artistsHtml}
-            </div>` : ''}
         </div>`;
+    }
+
+    function renderLabels(labels) {
+        const el = document.getElementById('labels-content');
+        if (!el) return;
+        if (!labels.length) {
+            el.innerHTML = `<div class="empty-state"><i class="fas fa-building"></i><p>No label data found for this genre space.</p></div>`;
+            return;
+        }
+
+        const withContacts = labels.filter(l => l.website || (l.social_links && l.social_links.length));
+        const withoutContacts = labels.filter(l => !l.website && !(l.social_links && l.social_links.length));
+
+        let html = `<div class="labels-stack-header">
+            <span class="labels-summary">${labels.length} labels found &mdash; <span class="labels-summary-contacts">${withContacts.length} with contact info</span></span>
+            <div class="labels-filter-tabs">
+                <button class="labels-filter-btn active" data-filter="all">All</button>
+                <button class="labels-filter-btn" data-filter="contacts">With Contacts</button>
+                <button class="labels-filter-btn" data-filter="none">No Contacts</button>
+            </div>
+        </div>
+        <div class="labels-stack" id="labels-stack">
+            ${labels.map((l, i) => renderLabelCard(l, i)).join('')}
+        </div>`;
+
+        el.innerHTML = html;
+
+        // Filter tabs
+        el.querySelectorAll('.labels-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                el.querySelectorAll('.labels-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const filter = btn.dataset.filter;
+                el.querySelectorAll('.label-card').forEach(card => {
+                    const idx = parseInt(card.dataset.labelIndex);
+                    const label = labels[idx];
+                    const hasContact = label.website || (label.social_links && label.social_links.length);
+                    if (filter === 'all') card.style.display = '';
+                    else if (filter === 'contacts') card.style.display = hasContact ? '' : 'none';
+                    else card.style.display = !hasContact ? '' : 'none';
+                });
+            });
+        });
+
+        // Generate pitch buttons
+        el.querySelectorAll('.btn-pitch-generate').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.labelIndex);
+                openPitchModal(labels[idx], btn);
+            });
+        });
     }
 
     fetch(`/api/artist/${ARTIST_ID}/label-contacts`)
         .then(r => r.json())
         .then(data => {
-            const labels = data.labels || [];
-            const el = document.getElementById('labels-content');
+            allLabels = data.labels || [];
             const badge = document.getElementById('labels-badge');
-            if (badge && labels.length) { badge.textContent = labels.length; badge.style.display = ''; }
-            if (!el) return;
-            if (!labels.length) {
-                el.innerHTML = `<div class="empty-state"><i class="fas fa-building"></i><p>No label data found for this genre space.</p></div>`;
-                return;
-            }
-            el.innerHTML = `<div class="labels-stack">${labels.map(renderLabelCard).join('')}</div>`;
+            if (badge && allLabels.length) { badge.textContent = allLabels.length; badge.style.display = ''; }
+            renderLabels(allLabels);
         })
         .catch(err => {
             document.getElementById('labels-content').innerHTML =
                 `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load label data. ${err.message}</p></div>`;
         });
+
+    // ── Pitch modal ───────────────────────────────────────────────────
+    function openPitchModal(label, triggerBtn) {
+        const modal = document.getElementById('pitch-modal');
+        const modalTitle = document.getElementById('pitch-modal-title');
+        const modalBody = document.getElementById('pitch-modal-body');
+        const pitchText = document.getElementById('pitch-modal-text');
+        const copyBtn = document.getElementById('pitch-copy-btn');
+
+        if (!modal) return;
+
+        modalTitle.textContent = `Pitch to ${label.name}`;
+        modalBody.style.display = 'none';
+        document.getElementById('pitch-modal-loading').style.display = '';
+        document.getElementById('pitch-modal-error').style.display = 'none';
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+
+        fetch(`/api/artist/${ARTIST_ID}/label-pitch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                label_name: label.name,
+                label_type: label.type || '',
+                label_country: label.country || '',
+                label_artists: label.artists || [],
+                label_website: label.website || '',
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('pitch-modal-loading').style.display = 'none';
+            if (data.error) {
+                document.getElementById('pitch-modal-error').style.display = '';
+                document.getElementById('pitch-modal-error-msg').textContent = data.error;
+                return;
+            }
+            pitchText.value = data.pitch || '';
+            modalBody.style.display = '';
+            document.getElementById('pitch-modal-footer-btns').style.display = '';
+
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(pitchText.value).then(() => {
+                    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000);
+                });
+            };
+        })
+        .catch(err => {
+            document.getElementById('pitch-modal-loading').style.display = 'none';
+            document.getElementById('pitch-modal-error').style.display = '';
+            document.getElementById('pitch-modal-error-msg').textContent = err.message;
+        });
+    }
+
+    // Close pitch modal
+    document.getElementById('pitch-modal-close')?.addEventListener('click', closePitchModal);
+    document.getElementById('pitch-modal')?.addEventListener('click', e => {
+        if (e.target === document.getElementById('pitch-modal')) closePitchModal();
+    });
+
+    function closePitchModal() {
+        document.getElementById('pitch-modal')?.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
 
     // ── Press targets ─────────────────────────────────────────────────
     fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
