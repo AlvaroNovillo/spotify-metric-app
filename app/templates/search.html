@@ -1,189 +1,76 @@
-{# --- START OF (REVISED) FILE app/templates/search.html --- #}
 {% extends 'base.html' %}
 
-{% block title %}
-{% if main_artist %}
-{{ main_artist.name }} - Artist Metrics
-{% else %}
-Search Artist - Spotify Metrics
-{% endif %}
+{% block title %}FuzzTracks — Search Artist{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 {% endblock %}
 
 {% block content %}
-<div style="max-width: 1400px; margin: 0 auto; padding: 0 var(--spacing-lg);">
-    <h1 class="text-center" style="margin-bottom: 2rem;">Search for an Artist</h1>
+<div class="search-page">
+    <div class="search-hero">
+        <div class="search-hero-glow"></div>
+        <div class="container search-hero-inner">
+            <h1 class="search-hero-title">Artist Intelligence</h1>
+            <p class="search-hero-subtitle">
+                Deep-dive into any artist: genres, audience reach, discographic contacts,
+                social presence, and playlist opportunities — all in one place.
+            </p>
 
-    {# Search Form #}
-    <div class="card" style="margin-bottom: 2rem; padding: 1.5rem;">
-        <form method="GET" action="{{ url_for('main.search_artist') }}" id="artist-search-form"
-            style="position: relative;">
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="text" name="query" id="artist-query-input" placeholder="Enter artist name..."
-                    value="{{ query or '' }}" required class="form-input" style="flex-grow: 1;">
-                <button type="submit" id="artist-search-button" class="btn btn-primary">
-                    <span class="button-text">Search</span>
-                    <span class="button-loading hidden animate-spin">Searching...</span>
-                </button>
+            <form method="GET" action="{{ url_for('main.search_artist') }}" id="search-form" class="search-form-wrap">
+                <div class="search-input-group">
+                    <i class="fas fa-search search-input-icon"></i>
+                    <input
+                        type="text"
+                        name="query"
+                        id="search-input"
+                        placeholder="Search for any artist..."
+                        value="{{ query or '' }}"
+                        autocomplete="off"
+                        class="search-main-input"
+                        required>
+                    <button type="submit" id="search-btn" class="search-submit-btn">
+                        <span class="btn-text">Search</span>
+                        <span class="btn-spinner hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                    </button>
+                </div>
+                {% if error %}
+                <p class="search-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                {% endif %}
+            </form>
+
+            <div class="search-features">
+                <div class="search-feature">
+                    <i class="fas fa-globe"></i>
+                    <span>Global audience reach</span>
+                </div>
+                <div class="search-feature">
+                    <i class="fas fa-address-book"></i>
+                    <span>Label & management contacts</span>
+                </div>
+                <div class="search-feature">
+                    <i class="fas fa-tags"></i>
+                    <span>Genre intelligence</span>
+                </div>
+                <div class="search-feature">
+                    <i class="fas fa-list-music"></i>
+                    <span>Playlist pitching</span>
+                </div>
             </div>
-            <div id="search-loading-indicator" class="hidden"
-                style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);">
-                <!-- Loader handled by button state mostly, but keeping structure if needed -->
-            </div>
-        </form>
-        <p id="search-status-text"
-            style="text-align: center; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; min-height: 1rem;">
-        </p>
-    </div>
-
-    {# Display Search Results #}
-    {% if search_performed %}
-    {% if main_artist %}
-    {# Artist Found #}
-    <div class="card fade-in">
-        <h2 class="text-center" style="margin-bottom: 1.5rem; color: var(--primary);">Search Result: {{ main_artist.name
-            }}</h2>
-
-        {# Links #}
-        <div class="flex justify-center gap-4" style="margin-bottom: 2rem; flex-wrap: wrap;">
-            <a href="{{ url_for('main.similar_artists', artist_id=main_artist.id) }}" id="view-similar-button"
-                class="btn btn-secondary">
-                <span class="button-text">View Similar Artists</span>
-                <span class="button-loading hidden animate-spin">Loading...</span>
-            </a>
-            <a href="{{ url_for('playlists.show_playlist_finder', artist_id=main_artist.id) }}"
-                id="find-playlists-button" class="btn" style="background-color: var(--accent-purple); color: white;">
-                <span class="button-text">Find Playlists for Artist</span>
-                <span class="button-loading hidden animate-spin">Loading...</span>
-            </a>
-        </div>
-
-        {# Include the Spotify artist details partial #}
-        {% set display_artist = main_artist %}
-        {% set display_releases = main_artist_releases %}
-        {% set top_tracks = top_tracks %}
-        {% set release_stats = release_stats %}
-        {% include '_artist_display.html' %}
-
-        {# Last.fm Events #}
-        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);">
-            <h4 style="font-size: 1.25rem; margin-bottom: 1rem; text-align: center; color: #fca5a5;">Upcoming Events
-                (Last.fm)</h4>
-            {% if lastfm_events %}
-            <ul style="display: flex; flex-direction: column; gap: 1rem;">
-                {% for event in lastfm_events %}
-                <li
-                    style="display: flex; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <div style="min-width: 80px; text-align: center;">
-                        <p style="font-weight: 700; font-size: 1.1rem;">{{ event.date.split(' ')[1] or '?' }}</p>
-                        <p style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">{{
-                            event.date.split(' ')[0] or 'Date' }}</p>
-                    </div>
-                    <div>
-                        {% if event.url %}
-                        <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer"
-                            style="font-weight: 600; color: var(--primary);">
-                            {{ event.title }} ↗
-                        </a>
-                        {% else %}
-                        <p style="font-weight: 600;">{{ event.title }}</p>
-                        {% endif %}
-                        <p style="font-size: 0.9rem; color: var(--text-secondary);">{{ event.venue | default('Venue not
-                            specified') }}</p>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">{{ event.location | default('Location
-                            not specified') }}</p>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% elif lastfm_events is not none %}
-            <p style="text-align: center; color: var(--text-muted); font-style: italic;">No upcoming events found.</p>
-            {% else %}
-            <p style="text-align: center; color: var(--warning);">Could not load event data.</p>
-            {% endif %}
-            <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">Event data
-                scraped from Last.fm.</p>
         </div>
     </div>
-
-    {% else %}
-    {# No artist found #}
-    <div class="card text-center">
-        <h2 style="margin-bottom: 1rem;">No Artist Found</h2>
-        {% if query %}
-        <p style="color: var(--text-muted);">Could not find any artist matching "{{ query }}".</p>
-        {% else %}
-        <p style="color: var(--text-muted);">Could not retrieve details.</p>
-        {% endif %}
-    </div>
-    {% endif %}
-    {% else %}
-    {# Initial state #}
-    <div class="card text-center">
-        <p style="color: var(--text-muted);">Enter an artist name above to view their metrics.</p>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // --- Search Form Logic ---
-        const searchForm = document.getElementById('artist-search-form');
-        const searchButton = document.getElementById('artist-search-button');
-        const queryInput = document.getElementById('artist-query-input');
-        const searchStatusText = document.getElementById('search-status-text');
-        const searchButtonTextSpan = searchButton ? searchButton.querySelector('.button-text') : null;
-        const searchButtonLoadingSpan = searchButton ? searchButton.querySelector('.button-loading') : null;
-
-        if (searchForm && searchButton && queryInput && searchButtonTextSpan && searchButtonLoadingSpan && searchStatusText) {
-            searchForm.addEventListener('submit', function (event) {
-                if (!queryInput.value.trim()) {
-                    searchStatusText.textContent = 'Please enter an artist name.';
-                    searchStatusText.style.color = 'var(--error)';
-                    event.preventDefault();
-                    return;
-                }
-                searchButton.disabled = true;
-                searchButtonTextSpan.classList.add('hidden');
-                searchButtonLoadingSpan.classList.remove('hidden');
-                queryInput.style.opacity = '0.5';
-                searchStatusText.textContent = 'Searching...';
-                searchStatusText.style.color = 'var(--text-main)';
-            });
-        }
-
-        // --- Navigation Button Logic ---
-        function setupNavLinkLoading(buttonId) {
-            const navButton = document.getElementById(buttonId);
-            const buttonTextSpan = navButton ? navButton.querySelector('.button-text') : null;
-            const buttonLoadingSpan = navButton ? navButton.querySelector('.button-loading') : null;
-
-            if (navButton && buttonTextSpan && buttonLoadingSpan) {
-                navButton.addEventListener('click', function (e) {
-                    if (navButton.classList.contains('disabled')) {
-                        e.preventDefault();
-                        return;
-                    }
-                    navButton.classList.add('disabled');
-                    navButton.style.pointerEvents = 'none';
-                    buttonTextSpan.classList.add('hidden');
-                    buttonLoadingSpan.classList.remove('hidden');
-                });
-
-                window.addEventListener('pageshow', function (event) {
-                    if (event.persisted) {
-                        navButton.classList.remove('disabled');
-                        navButton.style.pointerEvents = 'auto';
-                        buttonTextSpan.classList.remove('hidden');
-                        buttonLoadingSpan.classList.add('hidden');
-                    }
-                });
-            }
-        }
-        setupNavLinkLoading('view-similar-button');
-        setupNavLinkLoading('find-playlists-button');
-    });
+document.getElementById('search-form').addEventListener('submit', function() {
+    const btn = document.getElementById('search-btn');
+    btn.querySelector('.btn-text').classList.add('hidden');
+    btn.querySelector('.btn-spinner').classList.remove('hidden');
+    btn.disabled = true;
+});
 </script>
 {% endblock %}
-{# --- END OF (REVISED) FILE app/templates/search.html --- #}

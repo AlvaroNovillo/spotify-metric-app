@@ -1,0 +1,837 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ artist.name }} — FuzzTracks Artist Intelligence{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+{% endblock %}
+
+{% block content %}
+
+{# ─── HERO BANNER ──────────────────────────────────────────────────── #}
+<div class="intel-hero" id="intel-hero">
+    {% if artist.images %}
+    <div class="hero-bg" style="background-image: url('{{ artist.images[0].url }}');"></div>
+    {% endif %}
+    <div class="hero-overlay"></div>
+
+    <div class="hero-body container">
+        <div class="hero-avatar-wrap">
+            {% if artist.images %}
+            <img src="{{ artist.images[0].url }}" alt="{{ artist.name }}" class="hero-avatar">
+            {% else %}
+            <div class="hero-avatar hero-avatar--placeholder">
+                <i class="fas fa-music"></i>
+            </div>
+            {% endif %}
+            <div class="hero-avatar-badge">
+                <i class="fab fa-spotify"></i>
+            </div>
+        </div>
+
+        <div class="hero-info">
+            <p class="hero-label">Artist Intelligence Report</p>
+            <h1 class="hero-name">{{ artist.name }}</h1>
+
+            {% if artist.genres %}
+            <div class="hero-genres">
+                {% for genre in artist.genres[:3] %}
+                <span class="hero-genre-tag">{{ genre }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <span class="hero-stat-value">
+                        {% if artist.followers and artist.followers.total is not none %}
+                        {% set f = artist.followers.total %}
+                        {% if f >= 1000000 %}{{ "%.1f"|format(f / 1000000) }}M
+                        {% elif f >= 1000 %}{{ "%.0f"|format(f / 1000) }}K
+                        {% else %}{{ f }}{% endif %}
+                        {% else %}N/A{% endif %}
+                    </span>
+                    <span class="hero-stat-label">Followers</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="hero-stat-value">{{ artist.popularity if artist.popularity is not none else 'N/A' }}<span style="font-size:1rem;opacity:.6">/100</span></span>
+                    <span class="hero-stat-label">Popularity</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="hero-stat-value">{{ total_markets }}</span>
+                    <span class="hero-stat-label">Markets</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="hero-stat-value">{{ release_stats.total_releases if release_stats else 'N/A' }}</span>
+                    <span class="hero-stat-label">Releases</span>
+                </div>
+            </div>
+
+            <div class="hero-actions">
+                <a href="{{ url_for('main.similar_artists', artist_id=artist.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-network-wired"></i> Similar Artists
+                </a>
+                <a href="{{ url_for('playlists.show_playlist_finder', artist_id=artist.id) }}" class="btn btn-primary">
+                    <i class="fas fa-list-music"></i> Find Playlists
+                </a>
+                {% if artist.external_urls and artist.external_urls.spotify %}
+                <a href="{{ artist.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-ghost">
+                    <i class="fab fa-spotify"></i> Spotify
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ─── STICKY TAB NAV ──────────────────────────────────────────────── #}
+<div class="intel-tab-nav" id="intel-tab-nav">
+    <div class="container">
+        <div class="tab-nav-inner">
+            <button class="tab-btn active" data-tab="overview">
+                <i class="fas fa-chart-line"></i> Overview
+            </button>
+            <button class="tab-btn" data-tab="contacts">
+                <i class="fas fa-address-book"></i> Contacts
+                <span class="tab-badge" id="contacts-badge" style="display:none"></span>
+            </button>
+            <button class="tab-btn" data-tab="audience">
+                <i class="fas fa-globe"></i> Audience
+            </button>
+            <button class="tab-btn" data-tab="discography">
+                <i class="fas fa-compact-disc"></i> Discography
+            </button>
+            <button class="tab-btn" data-tab="events">
+                <i class="fas fa-calendar-alt"></i> Events
+                <span class="tab-badge" id="events-badge" style="display:none"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+{# ─── MAIN CONTENT ─────────────────────────────────────────────────── #}
+<div class="intel-body container">
+
+    {# ── TAB: OVERVIEW ── #}
+    <div class="tab-content active" id="tab-overview">
+        <div class="intel-grid">
+
+            {# Bio #}
+            <div class="intel-col-main">
+                <div class="intel-card" id="bio-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-user-circle card-icon"></i>
+                        <h3>Artist Bio</h3>
+                        <span class="loading-chip" id="bio-loading">Loading...</span>
+                    </div>
+                    <div id="bio-content">
+                        <div class="skeleton-block" style="height:1.1rem; width:90%; margin-bottom:.6rem;"></div>
+                        <div class="skeleton-block" style="height:1.1rem; width:80%; margin-bottom:.6rem;"></div>
+                        <div class="skeleton-block" style="height:1.1rem; width:95%; margin-bottom:.6rem;"></div>
+                        <div class="skeleton-block" style="height:1.1rem; width:70%;"></div>
+                    </div>
+                </div>
+
+                {# Top Tracks #}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-fire card-icon card-icon--orange"></i>
+                        <h3>Top Tracks</h3>
+                    </div>
+                    {% if top_tracks %}
+                    <ol class="track-list">
+                        {% for track in top_tracks %}
+                        <li class="track-item">
+                            <span class="track-num">{{ loop.index }}</span>
+                            {% if track.album and track.album.images %}
+                            <img src="{{ track.album.images[-1].url }}" alt="{{ track.name }}"
+                                class="track-cover">
+                            {% else %}
+                            <div class="track-cover track-cover--placeholder"><i class="fas fa-music"></i></div>
+                            {% endif %}
+                            <div class="track-info">
+                                <span class="track-name">{{ track.name }}</span>
+                                {% if track.album %}
+                                <span class="track-album">{{ track.album.name }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="track-meta">
+                                <div class="pop-bar-wrap" title="Popularity: {{ track.popularity }}">
+                                    <div class="pop-bar" style="width:{{ track.popularity }}%"></div>
+                                </div>
+                                <span class="pop-label">{{ track.popularity }}</span>
+                            </div>
+                            {% if track.external_urls and track.external_urls.spotify %}
+                            <a href="{{ track.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                                class="track-link" title="Open on Spotify">
+                                <i class="fab fa-spotify"></i>
+                            </a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ol>
+                    {% else %}
+                    <p class="empty-msg">No public top tracks found.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Sidebar: Stats + Genres #}
+            <div class="intel-col-side">
+                {# Key Stats #}
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-tachometer-alt card-icon card-icon--blue"></i>
+                        <h3>Key Metrics</h3>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Followers</span>
+                            <span class="metric-value">
+                                {% if artist.followers and artist.followers.total is not none %}
+                                {{ "{:,}".format(artist.followers.total) }}
+                                {% else %}N/A{% endif %}
+                            </span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Popularity Score</span>
+                            <div class="metric-with-bar">
+                                <span class="metric-value">{{ artist.popularity if artist.popularity is not none else 'N/A' }}</span>
+                                {% if artist.popularity is not none %}
+                                <div class="metric-bar-wrap">
+                                    <div class="metric-bar" style="width:{{ artist.popularity }}%;
+                                        {% if artist.popularity >= 75 %}background: var(--primary);
+                                        {% elif artist.popularity >= 50 %}background: var(--accent-blue);
+                                        {% else %}background: var(--text-muted);{% endif %}">
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if release_stats and release_stats.total_releases > 0 %}
+                        <div class="metric-item">
+                            <span class="metric-label">Total Releases</span>
+                            <span class="metric-value">{{ release_stats.total_releases }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Albums</span>
+                            <span class="metric-value">{{ release_stats.album_count }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Singles / EPs</span>
+                            <span class="metric-value">{{ release_stats.single_count }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Avg. Release Popularity</span>
+                            <span class="metric-value">
+                                {{ release_stats.average_popularity if release_stats.average_popularity is not none else 'N/A' }}
+                            </span>
+                        </div>
+                        {% if release_stats.first_release_year %}
+                        <div class="metric-item">
+                            <span class="metric-label">Active Since</span>
+                            <span class="metric-value">{{ release_stats.first_release_year }}</span>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Genres & Tags #}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-tags card-icon card-icon--purple"></i>
+                        <h3>Genres & Tags</h3>
+                        <span class="loading-chip" id="tags-loading">Loading...</span>
+                    </div>
+                    <div id="genres-content">
+                        {% if artist.genres %}
+                        <p class="tag-source-label">Spotify Genres</p>
+                        <div class="tag-cloud" id="spotify-genres">
+                            {% for genre in artist.genres %}
+                            <span class="genre-tag genre-tag--spotify">{{ genre }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <p class="tag-source-label mt-3" id="lastfm-tag-label" style="display:none">Last.fm Tags</p>
+                        <div class="tag-cloud" id="lastfm-tags"></div>
+                    </div>
+                </div>
+
+                {# Record Labels (from Spotify) #}
+                {% if artist_labels %}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-building card-icon card-icon--gold"></i>
+                        <h3>Record Labels</h3>
+                        <span class="label-source-note">(Spotify)</span>
+                    </div>
+                    <ul class="label-list">
+                        {% for label in artist_labels %}
+                        <li class="label-item">
+                            <i class="fas fa-record-vinyl label-icon"></i>
+                            <span>{{ label }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB: CONTACTS ── #}
+    <div class="tab-content" id="tab-contacts">
+        <div class="intel-grid">
+            <div class="intel-col-main">
+
+                {# Social Media Links #}
+                <div class="intel-card" id="social-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-share-alt card-icon card-icon--pink"></i>
+                        <h3>Social Media & Streaming</h3>
+                        <span class="loading-chip" id="social-loading">Loading...</span>
+                    </div>
+                    <div id="social-content">
+                        <div class="contacts-loading-state">
+                            <div class="skeleton-block" style="height:3.5rem; margin-bottom:.5rem; border-radius:.75rem;"></div>
+                            <div class="skeleton-block" style="height:3.5rem; margin-bottom:.5rem; border-radius:.75rem;"></div>
+                            <div class="skeleton-block" style="height:3.5rem; border-radius:.75rem;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Management #}
+                <div class="intel-card mt-4" id="mgmt-card" style="display:none">
+                    <div class="intel-card-header">
+                        <i class="fas fa-user-tie card-icon card-icon--blue"></i>
+                        <h3>Management</h3>
+                    </div>
+                    <div id="mgmt-content"></div>
+                </div>
+
+            </div>
+            <div class="intel-col-side">
+
+                {# Record Labels (from MusicBrainz) #}
+                <div class="intel-card" id="labels-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-building card-icon card-icon--gold"></i>
+                        <h3>Discographic Labels</h3>
+                        <span class="loading-chip" id="labels-loading">Loading...</span>
+                    </div>
+                    <div id="labels-content">
+                        <div class="skeleton-block" style="height:2rem; margin-bottom:.5rem; border-radius:.5rem;"></div>
+                        <div class="skeleton-block" style="height:2rem; border-radius:.5rem;"></div>
+                    </div>
+                </div>
+
+                {# Official Website #}
+                <div class="intel-card mt-4" id="website-card" style="display:none">
+                    <div class="intel-card-header">
+                        <i class="fas fa-globe card-icon card-icon--green"></i>
+                        <h3>Official Website</h3>
+                    </div>
+                    <div id="website-content"></div>
+                </div>
+
+                {# Wikipedia #}
+                <div class="intel-card mt-4" id="wikipedia-card" style="display:none">
+                    <div class="intel-card-header">
+                        <i class="fab fa-wikipedia-w card-icon"></i>
+                        <h3>Wikipedia</h3>
+                    </div>
+                    <div id="wikipedia-link-content"></div>
+                </div>
+
+                {# Data Source Note #}
+                <div class="intel-card mt-4 source-note-card">
+                    <p class="source-note-text">
+                        <i class="fas fa-info-circle"></i>
+                        Contact data sourced from <strong>MusicBrainz</strong>, the open music encyclopedia.
+                        Data may be incomplete for emerging artists.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB: AUDIENCE ── #}
+    <div class="tab-content" id="tab-audience">
+        <div class="intel-grid">
+            <div class="intel-col-main">
+
+                {# Market Reach Map #}
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-map-marked-alt card-icon card-icon--blue"></i>
+                        <h3>Global Market Reach</h3>
+                        <span class="badge badge-primary">{{ total_markets }} markets</span>
+                    </div>
+
+                    {% if market_breakdown %}
+                    <div class="market-regions">
+                        {% set region_icons = {
+                            'North America': 'fa-flag-usa',
+                            'Latin America': 'fa-globe-americas',
+                            'Europe': 'fa-globe-europe',
+                            'Asia Pacific': 'fa-globe-asia',
+                            'Middle East & Africa': 'fa-globe-africa',
+                            'Other': 'fa-globe'
+                        } %}
+                        {% set region_max = market_breakdown.values() | max %}
+                        {% for region, count in market_breakdown.items() | sort(attribute='1', reverse=True) %}
+                        <div class="market-region-item">
+                            <div class="market-region-header">
+                                <span class="market-region-name">
+                                    <i class="fas {{ region_icons.get(region, 'fa-globe') }}"></i>
+                                    {{ region }}
+                                </span>
+                                <span class="market-region-count">{{ count }} countries</span>
+                            </div>
+                            <div class="market-bar-wrap">
+                                <div class="market-bar" style="width: {{ (count / region_max * 100) | round }}%"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-msg">No market data available.</p>
+                    {% endif %}
+                </div>
+
+                {# Popularity Context #}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-chart-bar card-icon card-icon--orange"></i>
+                        <h3>Popularity Context</h3>
+                    </div>
+                    <div class="pop-context-grid">
+                        {% set pop = artist.popularity or 0 %}
+                        <div class="pop-context-item {% if pop >= 80 %}active{% endif %}">
+                            <div class="pop-context-icon"><i class="fas fa-crown"></i></div>
+                            <span class="pop-context-label">Mainstream</span>
+                            <span class="pop-context-range">80–100</span>
+                        </div>
+                        <div class="pop-context-item {% if pop >= 60 and pop < 80 %}active{% endif %}">
+                            <div class="pop-context-icon"><i class="fas fa-star"></i></div>
+                            <span class="pop-context-label">Established</span>
+                            <span class="pop-context-range">60–79</span>
+                        </div>
+                        <div class="pop-context-item {% if pop >= 40 and pop < 60 %}active{% endif %}">
+                            <div class="pop-context-icon"><i class="fas fa-music"></i></div>
+                            <span class="pop-context-label">Rising</span>
+                            <span class="pop-context-range">40–59</span>
+                        </div>
+                        <div class="pop-context-item {% if pop >= 20 and pop < 40 %}active{% endif %}">
+                            <div class="pop-context-icon"><i class="fas fa-seedling"></i></div>
+                            <span class="pop-context-label">Emerging</span>
+                            <span class="pop-context-range">20–39</span>
+                        </div>
+                        <div class="pop-context-item {% if pop < 20 %}active{% endif %}">
+                            <div class="pop-context-icon"><i class="fas fa-gem"></i></div>
+                            <span class="pop-context-label">Underground</span>
+                            <span class="pop-context-range">0–19</span>
+                        </div>
+                    </div>
+                    <p class="pop-context-note">
+                        <strong>{{ artist.name }}</strong> scores <strong>{{ artist.popularity }}/100</strong> on Spotify's
+                        proprietary popularity algorithm, which factors in recent stream counts and listener engagement.
+                    </p>
+                </div>
+            </div>
+
+            <div class="intel-col-side">
+                {# Audience Signals #}
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <i class="fas fa-signal card-icon card-icon--green"></i>
+                        <h3>Audience Signals</h3>
+                    </div>
+                    <div class="audience-signals">
+                        <div class="signal-item">
+                            <div class="signal-label">Global Availability</div>
+                            <div class="signal-value">
+                                {% if total_markets >= 100 %}
+                                <span class="signal-chip signal-chip--high">Worldwide</span>
+                                {% elif total_markets >= 50 %}
+                                <span class="signal-chip signal-chip--mid">Broad</span>
+                                {% elif total_markets > 0 %}
+                                <span class="signal-chip signal-chip--low">Limited</span>
+                                {% else %}
+                                <span class="signal-chip">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="signal-item">
+                            <div class="signal-label">Artist Tier</div>
+                            <div class="signal-value">
+                                {% set f = artist.followers.total if artist.followers else 0 %}
+                                {% if f >= 10000000 %}
+                                <span class="signal-chip signal-chip--high">Superstar</span>
+                                {% elif f >= 1000000 %}
+                                <span class="signal-chip signal-chip--high">Major Artist</span>
+                                {% elif f >= 100000 %}
+                                <span class="signal-chip signal-chip--mid">Mid-tier</span>
+                                {% elif f >= 10000 %}
+                                <span class="signal-chip signal-chip--low">Indie</span>
+                                {% else %}
+                                <span class="signal-chip">Emerging</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="signal-item">
+                            <div class="signal-label">Content Volume</div>
+                            <div class="signal-value">
+                                {% set total_r = release_stats.total_releases if release_stats else 0 %}
+                                {% if total_r >= 20 %}
+                                <span class="signal-chip signal-chip--high">Prolific</span>
+                                {% elif total_r >= 5 %}
+                                <span class="signal-chip signal-chip--mid">Active</span>
+                                {% elif total_r > 0 %}
+                                <span class="signal-chip signal-chip--low">Selective</span>
+                                {% else %}
+                                <span class="signal-chip">Debut</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="signal-item">
+                            <div class="signal-label">Genre Diversity</div>
+                            <div class="signal-value">
+                                {% set genre_count = artist.genres | length %}
+                                {% if genre_count >= 4 %}
+                                <span class="signal-chip signal-chip--mid">Multi-genre</span>
+                                {% elif genre_count >= 1 %}
+                                <span class="signal-chip signal-chip--low">Focused</span>
+                                {% else %}
+                                <span class="signal-chip">Undefined</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Playlist Opportunity #}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-bullseye card-icon card-icon--pink"></i>
+                        <h3>Promotion Opportunity</h3>
+                    </div>
+                    <p class="promo-pitch">
+                        With a popularity score of <strong>{{ artist.popularity or 'N/A' }}</strong>
+                        and <strong>{{ total_markets }}</strong> active markets,
+                        targeted playlist pitching can dramatically extend reach.
+                    </p>
+                    <a href="{{ url_for('playlists.show_playlist_finder', artist_id=artist.id) }}"
+                        class="btn btn-primary btn-full mt-3">
+                        <i class="fas fa-search"></i> Find Playlists to Pitch
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB: DISCOGRAPHY ── #}
+    <div class="tab-content" id="tab-discography">
+        <div class="intel-card">
+            <div class="intel-card-header">
+                <i class="fas fa-compact-disc card-icon"></i>
+                <h3>Full Discography</h3>
+                {% if releases %}
+                <span class="badge badge-secondary">{{ releases | length }} releases</span>
+                {% endif %}
+            </div>
+            {% if releases %}
+            <div class="discog-grid">
+                {% for release in releases %}
+                <div class="discog-item">
+                    {% if release.images %}
+                    <img src="{{ release.images[0].url }}" alt="{{ release.name }}" class="discog-cover">
+                    {% else %}
+                    <div class="discog-cover discog-cover--placeholder"><i class="fas fa-compact-disc"></i></div>
+                    {% endif %}
+                    <div class="discog-info">
+                        <span class="discog-type">{{ release.album_type | capitalize }}</span>
+                        <a href="{{ release.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
+                            class="discog-name">{{ release.name }}</a>
+                        <span class="discog-date">{{ release.release_date }}</span>
+                        {% if release.label %}
+                        <span class="discog-label">
+                            <i class="fas fa-record-vinyl"></i> {{ release.label }}
+                        </span>
+                        {% endif %}
+                        <div class="discog-meta">
+                            {% if release.total_tracks_fetched is defined %}
+                            <span><i class="fas fa-music"></i> {{ release.total_tracks_fetched }} tracks</span>
+                            {% endif %}
+                            {% if release.popularity is defined %}
+                            <span class="discog-pop">
+                                <div class="pop-bar-wrap pop-bar-wrap--sm" title="Popularity {{ release.popularity }}">
+                                    <div class="pop-bar" style="width:{{ release.popularity }}%"></div>
+                                </div>
+                                {{ release.popularity }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-msg">No releases found for this artist.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── TAB: EVENTS ── #}
+    <div class="tab-content" id="tab-events">
+        <div class="intel-card">
+            <div class="intel-card-header">
+                <i class="fas fa-calendar-alt card-icon card-icon--orange"></i>
+                <h3>Upcoming Events</h3>
+                <span class="loading-chip" id="events-loading">Loading...</span>
+                <span class="source-note" style="margin-left:auto; font-size:.75rem; color:var(--text-muted)">
+                    via Last.fm
+                </span>
+            </div>
+            <div id="events-content">
+                <div class="events-loading-state">
+                    {% for i in range(3) %}
+                    <div class="skeleton-event">
+                        <div class="skeleton-block" style="width:3rem; height:3.5rem; flex-shrink:0; border-radius:.5rem;"></div>
+                        <div style="flex:1">
+                            <div class="skeleton-block" style="height:1rem; width:60%; margin-bottom:.5rem;"></div>
+                            <div class="skeleton-block" style="height:.8rem; width:40%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /intel-body -->
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    const ARTIST_ID = {{ artist.id | tojson }};
+    const ARTIST_NAME = {{ artist.name | tojson }};
+
+    // ── Tab navigation ────────────────────────────────────────────────
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.dataset.tab;
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + target)?.classList.add('active');
+        });
+    });
+
+    // ── Sticky nav behaviour ──────────────────────────────────────────
+    const hero = document.getElementById('intel-hero');
+    const nav = document.getElementById('intel-tab-nav');
+    const observer = new IntersectionObserver(
+        ([entry]) => nav.classList.toggle('stuck', !entry.isIntersecting),
+        { threshold: 0 }
+    );
+    if (hero) observer.observe(hero);
+
+    // ── Load async intel data ─────────────────────────────────────────
+    function hideLoading(id) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    }
+
+    function renderSocialLink(link) {
+        return `<a href="${link.url}" target="_blank" rel="noopener noreferrer" class="social-link-card">
+            <span class="social-link-icon"><i class="${link.icon}"></i></span>
+            <span class="social-link-name">${link.platform}</span>
+            <i class="fas fa-external-link-alt social-link-arrow"></i>
+        </a>`;
+    }
+
+    function renderLabelItem(label) {
+        let period = '';
+        if (label.begin && label.end) period = `${label.begin} – ${label.end}`;
+        else if (label.begin) period = `${label.begin} – ${label.ended ? 'disbanded' : 'present'}`;
+        return `<li class="label-item ${label.ended ? 'label-item--past' : ''}">
+            <i class="fas fa-record-vinyl label-icon"></i>
+            <div>
+                <span class="label-name">${label.name}</span>
+                ${period ? `<span class="label-period">${period}</span>` : ''}
+                ${!label.ended ? '<span class="label-badge-active">Active</span>' : ''}
+            </div>
+        </li>`;
+    }
+
+    function renderEvent(ev) {
+        const dateHtml = ev.date ? `<div class="event-date-box">
+            <span class="event-month">${ev.date.split(' ')[0] || ''}</span>
+            <span class="event-day">${ev.date.split(' ')[1] || ''}</span>
+        </div>` : '';
+        const titleHtml = ev.url
+            ? `<a href="${ev.url}" target="_blank" rel="noopener noreferrer" class="event-title">${ev.title} <i class="fas fa-external-link-alt" style="font-size:.7em"></i></a>`
+            : `<span class="event-title">${ev.title}</span>`;
+        return `<li class="event-item">
+            ${dateHtml}
+            <div class="event-info">
+                ${titleHtml}
+                <span class="event-venue">${ev.venue || ''}</span>
+                <span class="event-location">${ev.location || ''}</span>
+            </div>
+        </li>`;
+    }
+
+    fetch(`/api/artist/${ARTIST_ID}/intel`)
+        .then(r => r.json())
+        .then(data => {
+
+            // ── Last.fm Tags ────────────────────────────────────────
+            hideLoading('tags-loading');
+            if (data.lastfm_tags && data.lastfm_tags.length) {
+                const labelEl = document.getElementById('lastfm-tag-label');
+                const tagEl = document.getElementById('lastfm-tags');
+                if (labelEl) labelEl.style.display = '';
+                if (tagEl) {
+                    tagEl.innerHTML = data.lastfm_tags.slice(0, 20).map(t =>
+                        `<span class="genre-tag genre-tag--lastfm">${t}</span>`
+                    ).join('');
+                }
+            }
+
+            // ── Bio (Wikipedia) ─────────────────────────────────────
+            hideLoading('bio-loading');
+            const bioEl = document.getElementById('bio-content');
+            if (bioEl) {
+                if (data.wikipedia && data.wikipedia.extract) {
+                    bioEl.innerHTML = `<p class="bio-text">${data.wikipedia.extract}</p>
+                        ${data.wikipedia.page_url ? `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="bio-read-more">Read more on Wikipedia <i class="fas fa-external-link-alt"></i></a>` : ''}`;
+                } else {
+                    bioEl.innerHTML = `<p class="empty-msg">No biography available. <a href="https://www.last.fm/music/${encodeURIComponent(ARTIST_NAME)}" target="_blank" rel="noopener noreferrer">Check Last.fm</a></p>`;
+                }
+            }
+
+            // ── Social Links ────────────────────────────────────────
+            hideLoading('social-loading');
+            const socialEl = document.getElementById('social-content');
+            if (socialEl) {
+                const mb = data.musicbrainz;
+                const social = mb ? (mb.social_links || []) : [];
+                const streaming = mb ? (mb.streaming_links || []) : [];
+                const allLinks = [...social, ...streaming];
+                if (allLinks.length) {
+                    socialEl.innerHTML = `<div class="social-links-grid">${allLinks.map(renderSocialLink).join('')}</div>`;
+                    // Update badge
+                    const badge = document.getElementById('contacts-badge');
+                    if (badge) { badge.textContent = allLinks.length; badge.style.display = ''; }
+                } else {
+                    socialEl.innerHTML = `<p class="empty-msg">No social profiles found in MusicBrainz. <a href="https://musicbrainz.org/search?query=${encodeURIComponent(ARTIST_NAME)}&type=artist" target="_blank" rel="noopener noreferrer">Add them here</a></p>`;
+                }
+            }
+
+            // ── Labels (MusicBrainz) ────────────────────────────────
+            hideLoading('labels-loading');
+            const labelsEl = document.getElementById('labels-content');
+            if (labelsEl) {
+                const mb = data.musicbrainz;
+                const labels = mb ? (mb.labels || []) : [];
+                if (labels.length) {
+                    labelsEl.innerHTML = `<ul class="label-list">${labels.map(renderLabelItem).join('')}</ul>`;
+                } else {
+                    labelsEl.innerHTML = `<p class="empty-msg">No label data found in MusicBrainz.</p>`;
+                }
+            }
+
+            // ── Official Website ────────────────────────────────────
+            const mb = data.musicbrainz;
+            if (mb && mb.website) {
+                const card = document.getElementById('website-card');
+                const content = document.getElementById('website-content');
+                if (card && content) {
+                    card.style.display = '';
+                    const displayUrl = mb.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+                    content.innerHTML = `<a href="${mb.website}" target="_blank" rel="noopener noreferrer" class="website-link">
+                        <i class="fas fa-external-link-alt"></i> ${displayUrl}
+                    </a>`;
+                }
+            }
+
+            // ── Wikipedia link in contacts tab ─────────────────────
+            if (data.wikipedia && data.wikipedia.page_url) {
+                const card = document.getElementById('wikipedia-card');
+                const content = document.getElementById('wikipedia-link-content');
+                if (card && content) {
+                    card.style.display = '';
+                    content.innerHTML = `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="website-link">
+                        <i class="fab fa-wikipedia-w"></i> ${data.wikipedia.title || 'Wikipedia Page'}
+                    </a>`;
+                }
+            }
+
+            // ── Management ──────────────────────────────────────────
+            if (mb && mb.management && mb.management.length) {
+                const card = document.getElementById('mgmt-card');
+                const content = document.getElementById('mgmt-content');
+                if (card && content) {
+                    card.style.display = '';
+                    content.innerHTML = `<ul class="label-list">${mb.management.map(m =>
+                        `<li class="label-item">
+                            <i class="fas fa-user-tie label-icon"></i>
+                            <div>
+                                <span class="label-name">${m.name}</span>
+                                <span class="label-period">${m.role}</span>
+                            </div>
+                        </li>`
+                    ).join('')}</ul>`;
+                }
+            }
+
+            // ── Events ─────────────────────────────────────────────
+            hideLoading('events-loading');
+            const eventsEl = document.getElementById('events-content');
+            if (eventsEl) {
+                if (data.lastfm_events && data.lastfm_events.length) {
+                    const badge = document.getElementById('events-badge');
+                    if (badge) { badge.textContent = data.lastfm_events.length; badge.style.display = ''; }
+                    eventsEl.innerHTML = `<ul class="events-list">${data.lastfm_events.map(renderEvent).join('')}</ul>`;
+                } else {
+                    eventsEl.innerHTML = `<div class="empty-events">
+                        <i class="fas fa-calendar-times empty-events-icon"></i>
+                        <p>No upcoming events found on Last.fm.</p>
+                    </div>`;
+                }
+            }
+
+        })
+        .catch(err => {
+            console.error('Intel API error:', err);
+            // Show graceful fallbacks
+            ['bio-loading', 'tags-loading', 'social-loading', 'labels-loading', 'events-loading'].forEach(hideLoading);
+            const bioEl = document.getElementById('bio-content');
+            if (bioEl) bioEl.innerHTML = '<p class="empty-msg">Could not load additional data.</p>';
+            const evEl = document.getElementById('events-content');
+            if (evEl) evEl.innerHTML = '<p class="empty-msg">Could not load event data.</p>';
+            const socEl = document.getElementById('social-content');
+            if (socEl) socEl.innerHTML = '<p class="empty-msg">Could not load contact data.</p>';
+            const labEl = document.getElementById('labels-content');
+            if (labEl) labEl.innerHTML = '<p class="empty-msg">Could not load label data.</p>';
+        });
+
+})();
+</script>
+{% endblock %}

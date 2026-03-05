@@ -3,40 +3,41 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{% block title %}Spotify Artist Metrics{% endblock %}</title>
-        
+        <title>{% block title %}FuzzTracks — Artist Intelligence{% endblock %}</title>
+
         <!-- Google Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        
-        <!-- Custom CSS -->
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+        <!-- Core CSS -->
         <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"> <!-- Keep legacy for now if needed, but override -->
-        
-        <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Spotify_logo_without_text.svg/2048px-Spotify_logo_without_text.svg.png" type="image/png">
-        
+        <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+
         {% block extra_css %}{% endblock %}
     </head>
 <body class="bg-app">
     <nav class="navbar">
         <div class="container flex justify-between items-center">
-            {# Link brand to search page #}
             <a href="{{ url_for('main.search_artist') }}" class="nav-brand">
-                <span>🎵 Spotify Artist Metrics</span>
+                <span style="font-size:1.4rem;">🎵</span>
+                <span>FuzzTracks</span>
             </a>
             <div class="flex items-center gap-4">
-                <a href="{{ url_for('main.search_artist') }}" class="nav-link">Search Artist</a>
+                <a href="{{ url_for('main.search_artist') }}" class="nav-link">
+                    Search Artist
+                </a>
             </div>
         </div>
     </nav>
 
-    <main class="container" style="margin-top: 2rem; padding-bottom: 2rem;">
-        {# Flash Message Display #}
+    <main style="padding-bottom: 4rem;">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="mb-4">
+            <div class="container" style="margin-top:1rem;">
               {% for category, message in messages %}
                 <div class="flash-message p-4 mb-2 rounded-md
                   {% if category == 'error' %} bg-red-900 text-red-100 border border-red-700
@@ -54,8 +55,8 @@
         {% endblock %}
     </main>
 
-    <footer class="text-center text-muted mt-10 pb-5">
-        <p>© 2024 Spotify Artist Metrics. MIT License.</p>
+    <footer style="text-align:center; padding: 2rem 1rem; color: var(--text-muted); font-size:.85rem; border-top: 1px solid rgba(255,255,255,.05);">
+        <p>FuzzTracks &copy; 2024 — Artist Intelligence Platform</p>
     </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
