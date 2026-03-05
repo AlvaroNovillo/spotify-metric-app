@@ -294,4 +294,76 @@ def scrape_lastfm_tags(artist_name):
         traceback.print_exc()
         return []
 
+def scrape_lastfm_artist_stats(artist_name):
+    """
+    Scrape Last.fm artist page for listener count and total scrobbles.
+    Returns dict with 'listeners' and 'scrobbles' (integers) or empty dict on failure.
+    """
+    if not artist_name:
+        return {}
+
+    try:
+        encoded_artist = urllib.parse.quote_plus(artist_name)
+        url = f"https://www.last.fm/music/{encoded_artist}"
+    except Exception:
+        return {}
+
+    try:
+        _add_random_delay(0.5, 1.2)
+        response = SESSION.get(url, timeout=15)
+
+        if response.status_code in (404, 406):
+            return {}
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        stats = {}
+
+        # Last.fm uses <abbr class="intl-number" title="1,234,567"> for large numbers
+        # The metadata is in a header-metadata section
+        header_items = soup.find_all('p', class_=re.compile(r'header-metadata'))
+        for p in header_items:
+            abbr = p.find('abbr', class_=re.compile(r'intl-number'))
+            label_el = p.find(class_=re.compile(r'header-metadata-title|subtext'))
+            if abbr and label_el:
+                label = label_el.get_text(strip=True).lower()
+                val_str = abbr.get('title', '').replace(',', '').strip()
+                try:
+                    val = int(val_str)
+                    if 'listener' in label:
+                        stats['listeners'] = val
+                    elif 'scrobble' in label:
+                        stats['scrobbles'] = val
+                except ValueError:
+                    pass
+
+        # Fallback: search for abbr tags near "listener" / "scrobble" text
+        if not stats:
+            for abbr in soup.find_all('abbr', class_=re.compile(r'intl-number')):
+                context = abbr.parent.get_text(strip=True).lower() if abbr.parent else ''
+                val_str = abbr.get('title', '').replace(',', '').strip()
+                try:
+                    val = int(val_str)
+                    if 'listener' in context and 'listeners' not in stats:
+                        stats['listeners'] = val
+                    elif 'scrobble' in context and 'scrobbles' not in stats:
+                        stats['scrobbles'] = val
+                except ValueError:
+                    pass
+
+        if stats:
+            print(f"[Last.fm Stats] {artist_name}: {stats}")
+        else:
+            print(f"[Last.fm Stats] Could not parse stats for '{artist_name}'")
+
+        return stats
+
+    except requests.exceptions.RequestException as e:
+        print(f"[Last.fm Stats] Request error for '{artist_name}': {e}")
+        return {}
+    except Exception as e:
+        print(f"[Last.fm Stats] Unexpected error for '{artist_name}': {e}")
+        return {}
+
+
 # --- END OF (REVISED) FILE app/lastfm/scraper.py ---

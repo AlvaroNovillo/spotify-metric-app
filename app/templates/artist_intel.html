@@ -76,8 +76,11 @@
                 <a href="{{ url_for('main.similar_artists', artist_id=artist.id) }}" class="btn btn-secondary">
                     <i class="fas fa-network-wired"></i> Similar Artists
                 </a>
-                <a href="{{ url_for('playlists.show_playlist_finder', artist_id=artist.id) }}" class="btn btn-primary">
-                    <i class="fas fa-list-music"></i> Find Playlists
+                <a href="{{ url_for('main.artist_pitch', artist_id=artist.id) }}" class="btn btn-primary">
+                    <i class="fas fa-bullhorn"></i> Pitch Hub
+                </a>
+                <a href="{{ url_for('main.artist_marketing', artist_id=artist.id) }}" class="btn btn-primary">
+                    <i class="fas fa-chart-line"></i> Strategy
                 </a>
                 {% if artist.external_urls and artist.external_urls.spotify %}
                 <a href="{{ artist.external_urls.spotify }}" target="_blank" rel="noopener noreferrer"
@@ -517,21 +520,38 @@
                     </div>
                 </div>
 
-                {# Playlist Opportunity #}
+                {# Last.fm Stats #}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fab fa-lastfm card-icon" style="color:#d51007"></i>
+                        <h3>Last.fm Stats</h3>
+                        <span class="loading-chip" id="lastfm-stats-loading">Loading...</span>
+                    </div>
+                    <div id="lastfm-stats-content" class="audience-signals" style="display:none"></div>
+                    <div class="skeleton-block" id="lastfm-stats-skeleton" style="height:4rem; border-radius:.5rem;"></div>
+                </div>
+
+                {# Promotion Actions #}
                 <div class="intel-card mt-4">
                     <div class="intel-card-header">
                         <i class="fas fa-bullseye card-icon card-icon--pink"></i>
-                        <h3>Promotion Opportunity</h3>
+                        <h3>Promotion Hub</h3>
                     </div>
                     <p class="promo-pitch">
                         With a popularity score of <strong>{{ artist.popularity or 'N/A' }}</strong>
                         and <strong>{{ total_markets }}</strong> active markets,
-                        targeted playlist pitching can dramatically extend reach.
+                        targeted pitching can dramatically extend reach.
                     </p>
-                    <a href="{{ url_for('playlists.show_playlist_finder', artist_id=artist.id) }}"
-                        class="btn btn-primary btn-full mt-3">
-                        <i class="fas fa-search"></i> Find Playlists to Pitch
-                    </a>
+                    <div class="promo-actions">
+                        <a href="{{ url_for('main.artist_pitch', artist_id=artist.id) }}"
+                            class="btn btn-primary btn-full mt-2">
+                            <i class="fas fa-bullhorn"></i> Pitch Hub
+                        </a>
+                        <a href="{{ url_for('main.artist_marketing', artist_id=artist.id) }}"
+                            class="btn btn-secondary btn-full mt-2">
+                            <i class="fas fa-chart-line"></i> AI Marketing Strategy
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -714,11 +734,20 @@
                 }
             }
 
-            // ── Bio (Wikipedia) ─────────────────────────────────────
+            // ── Bio (AI-generated) ──────────────────────────────────
             hideLoading('bio-loading');
             const bioEl = document.getElementById('bio-content');
             if (bioEl) {
-                if (data.wikipedia && data.wikipedia.extract) {
+                if (data.ai_bio) {
+                    const wikiLink = data.wikipedia && data.wikipedia.page_url
+                        ? `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="bio-read-more">Wikipedia <i class="fas fa-external-link-alt"></i></a>`
+                        : '';
+                    bioEl.innerHTML = `<div class="ai-bio-text">${data.ai_bio.replace(/\n\n/g, '</p><p class="bio-text">').replace(/^/, '<p class="bio-text">').replace(/$/, '</p>')}</div>
+                        <div class="bio-footer">
+                            <span class="ai-bio-badge"><i class="fas fa-robot"></i> AI-generated</span>
+                            ${wikiLink}
+                        </div>`;
+                } else if (data.wikipedia && data.wikipedia.extract) {
                     bioEl.innerHTML = `<p class="bio-text">${data.wikipedia.extract}</p>
                         ${data.wikipedia.page_url ? `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="bio-read-more">Read more on Wikipedia <i class="fas fa-external-link-alt"></i></a>` : ''}`;
                 } else {
@@ -798,6 +827,33 @@
                             </div>
                         </li>`
                     ).join('')}</ul>`;
+                }
+            }
+
+            // ── Last.fm Stats ────────────────────────────────────────
+            hideLoading('lastfm-stats-loading');
+            const statsSkeleton = document.getElementById('lastfm-stats-skeleton');
+            if (statsSkeleton) statsSkeleton.style.display = 'none';
+            if (data.lastfm_stats && (data.lastfm_stats.listeners || data.lastfm_stats.scrobbles)) {
+                const statsEl = document.getElementById('lastfm-stats-content');
+                if (statsEl) {
+                    const fmt = n => n ? n.toLocaleString() : '—';
+                    statsEl.innerHTML = `
+                        <div class="signal-item">
+                            <div class="signal-label"><i class="fab fa-lastfm" style="color:#d51007"></i> Monthly Listeners</div>
+                            <div class="signal-value signal-chip signal-chip--high">${fmt(data.lastfm_stats.listeners)}</div>
+                        </div>
+                        <div class="signal-item">
+                            <div class="signal-label"><i class="fab fa-lastfm" style="color:#d51007"></i> Total Scrobbles</div>
+                            <div class="signal-value signal-chip signal-chip--mid">${fmt(data.lastfm_stats.scrobbles)}</div>
+                        </div>`;
+                    statsEl.style.display = '';
+                }
+            } else {
+                const statsEl = document.getElementById('lastfm-stats-content');
+                if (statsEl) {
+                    statsEl.innerHTML = `<p class="empty-msg" style="padding:.5rem 0">Last.fm stats not available.</p>`;
+                    statsEl.style.display = '';
                 }
             }
 

@@ -1,0 +1,415 @@
+{% extends 'base.html' %}
+
+{% block title %}Pitch Hub — {{ artist.name }} — FuzzTracks{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+{% endblock %}
+
+{% block content %}
+
+{# ─── PAGE HEADER ──────────────────────────────────────────────────── #}
+<div class="page-header">
+    <div class="container">
+        <div class="page-header-inner">
+            <div class="page-header-back">
+                <a href="{{ url_for('main.artist_intel', artist_id=artist.id) }}" class="back-link">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>{{ artist.name }}</span>
+                </a>
+            </div>
+            <div class="page-header-title">
+                <div class="page-header-avatar">
+                    {% if artist.images %}
+                    <img src="{{ artist.images[-1].url if artist.images | length > 1 else artist.images[0].url }}"
+                        alt="{{ artist.name }}">
+                    {% else %}
+                    <div class="page-header-avatar-placeholder"><i class="fas fa-music"></i></div>
+                    {% endif %}
+                </div>
+                <div>
+                    <p class="page-header-label">Pitching Hub</p>
+                    <h1 class="page-header-name">{{ artist.name }}</h1>
+                </div>
+            </div>
+            <div class="page-header-actions">
+                <a href="{{ url_for('main.artist_marketing', artist_id=artist.id) }}" class="btn btn-primary">
+                    <i class="fas fa-chart-line"></i> Marketing Strategy
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ─── PITCH TABS ────────────────────────────────────────────────────── #}
+<div class="intel-tab-nav pitch-tab-nav" id="pitch-tab-nav">
+    <div class="container">
+        <div class="tab-nav-inner">
+            <button class="tab-btn active" data-tab="playlists">
+                <i class="fas fa-list-music"></i> Playlist Targets
+                <span class="tab-badge" id="playlists-badge" style="display:none"></span>
+            </button>
+            <button class="tab-btn" data-tab="labels">
+                <i class="fas fa-building"></i> Label Outreach
+                <span class="tab-badge" id="labels-badge" style="display:none"></span>
+            </button>
+            <button class="tab-btn" data-tab="press">
+                <i class="fas fa-newspaper"></i> Press Targets
+            </button>
+        </div>
+    </div>
+</div>
+
+{# ─── MAIN CONTENT ─────────────────────────────────────────────────── #}
+<div class="intel-body container" style="padding-top:2rem;">
+
+    {# ── TAB: PLAYLISTS ── #}
+    <div class="tab-content active" id="tab-playlists">
+        <div class="pitch-section-header">
+            <div>
+                <h2 class="pitch-section-title"><i class="fas fa-list-music"></i> Spotify Playlist Targets</h2>
+                <p class="pitch-section-desc">User-curated playlists matching {{ artist.name }}'s genres and style. Sorted by follower count.</p>
+            </div>
+            <div class="pitch-filters" id="playlist-filters" style="display:none">
+                <div class="pitch-filter-group">
+                    <label>Min followers</label>
+                    <select id="pl-min-followers" class="pitch-filter-select">
+                        <option value="0">Any</option>
+                        <option value="100">100+</option>
+                        <option value="1000">1K+</option>
+                        <option value="5000">5K+</option>
+                        <option value="10000">10K+</option>
+                    </select>
+                </div>
+                <div class="pitch-filter-group">
+                    <label>Min tracks</label>
+                    <select id="pl-min-tracks" class="pitch-filter-select">
+                        <option value="0">Any</option>
+                        <option value="20">20+</option>
+                        <option value="50">50+</option>
+                        <option value="100">100+</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="playlists-content">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <p class="loading-msg">Searching Spotify for playlist opportunities...</p>
+                <p class="loading-submsg">Scanning {{ artist.genres[:3] | join(', ') if artist.genres else 'genres' }} playlists</p>
+            </div>
+        </div>
+        <div id="playlists-show-more" style="display:none; text-align:center; padding:1.5rem 0;">
+            <button class="btn btn-secondary" id="pl-show-more-btn">
+                <i class="fas fa-chevron-down"></i> Show More Playlists
+            </button>
+        </div>
+    </div>
+
+    {# ── TAB: LABELS ── #}
+    <div class="tab-content" id="tab-labels">
+        <div class="pitch-section-header">
+            <div>
+                <h2 class="pitch-section-title"><i class="fas fa-building"></i> Label Outreach Database</h2>
+                <p class="pitch-section-desc">Labels signing artists in {{ artist.name }}'s genre space. Includes contact data from MusicBrainz.</p>
+            </div>
+        </div>
+
+        <div id="labels-content">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <p class="loading-msg">Building label database...</p>
+                <p class="loading-submsg">Analyzing similar artists' discographies + MusicBrainz enrichment</p>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB: PRESS ── #}
+    <div class="tab-content" id="tab-press">
+        <div class="pitch-section-header">
+            <div>
+                <h2 class="pitch-section-title"><i class="fas fa-newspaper"></i> Press & Media Targets</h2>
+                <p class="pitch-section-desc">AI-curated press outlets and blogs relevant to {{ artist.name }}'s genre and career stage.</p>
+            </div>
+        </div>
+
+        <div id="press-content">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <p class="loading-msg">Identifying press targets...</p>
+                <p class="loading-submsg">Analysing genre fit and reach</p>
+            </div>
+        </div>
+
+        {# Press pitch tips #}
+        <div class="pitch-tip-card mt-4" id="press-tips" style="display:none">
+            <div class="pitch-tip-header">
+                <i class="fas fa-lightbulb"></i>
+                <strong>Press Pitch Tips</strong>
+            </div>
+            <ul class="pitch-tip-list" id="press-tips-list"></ul>
+        </div>
+    </div>
+
+</div><!-- /intel-body -->
+
+{# ─── PITCH GUIDE ────────────────────────────────────────────────────── #}
+<div class="container" style="padding-bottom:3rem; margin-top:1rem;">
+    <div class="pitch-guide-card">
+        <div class="pitch-guide-header">
+            <i class="fas fa-info-circle"></i>
+            <strong>How to use this hub</strong>
+        </div>
+        <div class="pitch-guide-grid">
+            <div class="pitch-guide-item">
+                <div class="pitch-guide-icon"><i class="fas fa-list-music"></i></div>
+                <div>
+                    <strong>Playlist Targets</strong>
+                    <p>Submit your best-performing track to curators with 1K–50K followers for highest acceptance rates. Always personalise your pitch message.</p>
+                </div>
+            </div>
+            <div class="pitch-guide-item">
+                <div class="pitch-guide-icon"><i class="fas fa-building"></i></div>
+                <div>
+                    <strong>Label Outreach</strong>
+                    <p>Focus on labels actively signing artists in your genre space. Approach with a strong streaming track record and professional EPK.</p>
+                </div>
+            </div>
+            <div class="pitch-guide-item">
+                <div class="pitch-guide-icon"><i class="fas fa-newspaper"></i></div>
+                <div>
+                    <strong>Press Targets</strong>
+                    <p>Prioritise niche genre blogs before major outlets. An exclusive single review can generate significant discovery traffic.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    const ARTIST_ID = {{ artist.id | tojson }};
+    const ARTIST_NAME = {{ artist.name | tojson }};
+
+    // ── Tab navigation ────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.dataset.tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + target)?.classList.add('active');
+        });
+    });
+
+    // ── Sticky nav ────────────────────────────────────────────────────
+    const pageHeader = document.querySelector('.page-header');
+    const tabNav = document.getElementById('pitch-tab-nav');
+    if (pageHeader && tabNav) {
+        const obs = new IntersectionObserver(([e]) => tabNav.classList.toggle('stuck', !e.isIntersecting), { threshold: 0 });
+        obs.observe(pageHeader);
+    }
+
+    // ── Playlist rendering ─────────────────────────────────────────────
+    let allPlaylists = [];
+    let visibleCount = 24;
+
+    function formatNumber(n) {
+        if (!n && n !== 0) return '—';
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return Math.round(n / 1000) + 'K';
+        return n.toLocaleString();
+    }
+
+    function renderPlaylistCard(pl) {
+        const img = pl.image
+            ? `<img src="${pl.image}" alt="${pl.name}" class="pl-card-img" loading="lazy">`
+            : `<div class="pl-card-img pl-card-img--placeholder"><i class="fas fa-music"></i></div>`;
+
+        const keywords = pl.found_by && pl.found_by.length > 1
+            ? `<span class="pl-match-tag"><i class="fas fa-tag"></i> ${pl.found_by.length} keyword matches</span>`
+            : '';
+
+        return `<div class="pl-card" data-followers="${pl.followers || 0}" data-tracks="${pl.tracks_total || 0}">
+            ${img}
+            <div class="pl-card-body">
+                <div class="pl-card-top">
+                    <span class="pl-owner">${pl.owner_name || 'Curator'}</span>
+                    ${keywords}
+                </div>
+                <h4 class="pl-card-name">${pl.name}</h4>
+                ${pl.description ? `<p class="pl-card-desc">${pl.description}</p>` : ''}
+                <div class="pl-card-stats">
+                    <span class="pl-stat"><i class="fas fa-users"></i> ${formatNumber(pl.followers)}</span>
+                    <span class="pl-stat"><i class="fas fa-music"></i> ${pl.tracks_total || 0} tracks</span>
+                </div>
+            </div>
+            <div class="pl-card-actions">
+                ${pl.url ? `<a href="${pl.url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-spotify">
+                    <i class="fab fa-spotify"></i> Open
+                </a>` : ''}
+            </div>
+        </div>`;
+    }
+
+    function applyPlaylistFilters() {
+        const minFollowers = parseInt(document.getElementById('pl-min-followers')?.value || '0');
+        const minTracks = parseInt(document.getElementById('pl-min-tracks')?.value || '0');
+        const filtered = allPlaylists.filter(pl =>
+            (pl.followers || 0) >= minFollowers && (pl.tracks_total || 0) >= minTracks
+        );
+        renderPlaylistGrid(filtered);
+    }
+
+    function renderPlaylistGrid(list, count) {
+        const el = document.getElementById('playlists-content');
+        if (!el) return;
+        const show = list.slice(0, count || visibleCount);
+        if (show.length === 0) {
+            el.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><p>No playlists found matching your filters.</p></div>`;
+            document.getElementById('playlists-show-more').style.display = 'none';
+            return;
+        }
+        el.innerHTML = `<div class="pl-grid">${show.map(renderPlaylistCard).join('')}</div>`;
+        const moreEl = document.getElementById('playlists-show-more');
+        if (moreEl) moreEl.style.display = list.length > (count || visibleCount) ? '' : 'none';
+    }
+
+    // Load playlists
+    fetch(`/api/artist/${ARTIST_ID}/playlists`)
+        .then(r => r.json())
+        .then(data => {
+            allPlaylists = data.playlists || [];
+            const badge = document.getElementById('playlists-badge');
+            if (badge && allPlaylists.length) { badge.textContent = allPlaylists.length; badge.style.display = ''; }
+
+            const filterBar = document.getElementById('playlist-filters');
+            if (filterBar) filterBar.style.display = '';
+            ['pl-min-followers', 'pl-min-tracks'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', applyPlaylistFilters);
+            });
+
+            renderPlaylistGrid(allPlaylists);
+
+            const moreBtn = document.getElementById('pl-show-more-btn');
+            if (moreBtn) {
+                moreBtn.addEventListener('click', () => {
+                    visibleCount += 24;
+                    applyPlaylistFilters();
+                });
+            }
+        })
+        .catch(err => {
+            document.getElementById('playlists-content').innerHTML =
+                `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load playlists. ${err.message}</p></div>`;
+        });
+
+    // ── Label rendering ───────────────────────────────────────────────
+    function renderLabelCard(label) {
+        const socialHtml = (label.social_links || []).slice(0, 4).map(s =>
+            `<a href="${s.url}" target="_blank" rel="noopener noreferrer" class="label-social-btn" title="${s.platform}">
+                <i class="${s.icon}"></i>
+            </a>`
+        ).join('');
+
+        const artistsHtml = (label.artists || []).slice(0, 5).map(a =>
+            `<span class="label-artist-tag">${a}</span>`
+        ).join('');
+
+        const typeHtml = label.type ? `<span class="label-type-badge">${label.type}</span>` : '';
+        const countryHtml = label.country ? `<span class="label-country"><i class="fas fa-map-marker-alt"></i> ${label.country}</span>` : '';
+
+        return `<div class="label-card ${label.website ? 'label-card--has-website' : ''}">
+            <div class="label-card-header">
+                <div class="label-card-title">
+                    <div class="label-icon-wrap"><i class="fas fa-building"></i></div>
+                    <div>
+                        <h4 class="label-card-name">${label.name}</h4>
+                        <div class="label-card-meta">${typeHtml}${countryHtml}</div>
+                    </div>
+                </div>
+                <div class="label-card-actions">
+                    ${socialHtml}
+                    ${label.website ? `<a href="${label.website}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary" title="Official website">
+                        <i class="fas fa-globe"></i> Website
+                    </a>` : ''}
+                </div>
+            </div>
+            ${artistsHtml ? `<div class="label-artists-row">
+                <span class="label-artists-label">Signs:</span>
+                ${artistsHtml}
+            </div>` : ''}
+        </div>`;
+    }
+
+    fetch(`/api/artist/${ARTIST_ID}/label-contacts`)
+        .then(r => r.json())
+        .then(data => {
+            const labels = data.labels || [];
+            const el = document.getElementById('labels-content');
+            const badge = document.getElementById('labels-badge');
+            if (badge && labels.length) { badge.textContent = labels.length; badge.style.display = ''; }
+            if (!el) return;
+            if (!labels.length) {
+                el.innerHTML = `<div class="empty-state"><i class="fas fa-building"></i><p>No label data found for this genre space.</p></div>`;
+                return;
+            }
+            el.innerHTML = `<div class="labels-stack">${labels.map(renderLabelCard).join('')}</div>`;
+        })
+        .catch(err => {
+            document.getElementById('labels-content').innerHTML =
+                `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load label data. ${err.message}</p></div>`;
+        });
+
+    // ── Press targets ─────────────────────────────────────────────────
+    fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
+        .then(r => r.json())
+        .then(data => {
+            const strategy = data.strategy;
+            const pressEl = document.getElementById('press-content');
+            if (!pressEl) return;
+            if (!strategy || !strategy.press_targets) {
+                pressEl.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p>No press data available.</p></div>`;
+                return;
+            }
+            pressEl.innerHTML = `<div class="press-grid">${strategy.press_targets.map(p => `
+                <div class="press-card">
+                    <div class="press-card-icon"><i class="fas fa-newspaper"></i></div>
+                    <div class="press-card-body">
+                        <h4 class="press-outlet-name">${p.outlet}</h4>
+                        <p class="press-outlet-why">${p.why}</p>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+
+            // Show pitch tips from playlist strategy
+            if (strategy.playlist_strategy) {
+                const tipsCard = document.getElementById('press-tips');
+                const tipsList = document.getElementById('press-tips-list');
+                if (tipsCard && tipsList) {
+                    tipsCard.style.display = '';
+                    tipsList.innerHTML = [
+                        strategy.playlist_strategy.pitch_tip,
+                        `Target <strong>${strategy.playlist_strategy.target_tier}</strong> tier playlists first`,
+                        `Mood keywords to use: <strong>${(strategy.playlist_strategy.mood_keywords || []).join(', ')}</strong>`,
+                        strategy.social_strategy ? `Lead platform: <strong>${strategy.social_strategy.primary_platform}</strong> — ${strategy.social_strategy.why}` : null,
+                    ].filter(Boolean).map(t => `<li>${t}</li>`).join('');
+                }
+            }
+        })
+        .catch(err => {
+            const pressEl = document.getElementById('press-content');
+            if (pressEl) pressEl.innerHTML = `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load press data. ${err.message}</p></div>`;
+        });
+
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,421 @@
+{% extends 'base.html' %}
+
+{% block title %}Marketing Strategy — {{ artist.name }} — FuzzTracks{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+{% endblock %}
+
+{% block content %}
+
+{# ─── PAGE HEADER ──────────────────────────────────────────────────── #}
+<div class="page-header">
+    <div class="container">
+        <div class="page-header-inner">
+            <div class="page-header-back">
+                <a href="{{ url_for('main.artist_intel', artist_id=artist.id) }}" class="back-link">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>{{ artist.name }}</span>
+                </a>
+            </div>
+            <div class="page-header-title">
+                <div class="page-header-avatar">
+                    {% if artist.images %}
+                    <img src="{{ artist.images[-1].url if artist.images | length > 1 else artist.images[0].url }}"
+                        alt="{{ artist.name }}">
+                    {% else %}
+                    <div class="page-header-avatar-placeholder"><i class="fas fa-music"></i></div>
+                    {% endif %}
+                </div>
+                <div>
+                    <p class="page-header-label">AI Marketing Strategy</p>
+                    <h1 class="page-header-name">{{ artist.name }}</h1>
+                </div>
+            </div>
+            <div class="page-header-actions">
+                <a href="{{ url_for('main.artist_pitch', artist_id=artist.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-bullhorn"></i> Pitch Hub
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ─── LOADING OVERLAY ───────────────────────────────────────────────── #}
+<div class="container" style="padding-top:2rem; padding-bottom:3rem;" id="marketing-body">
+
+    <div id="marketing-loading" class="marketing-loading-state">
+        <div class="marketing-loading-inner">
+            <div class="marketing-loading-icon">
+                <div class="loading-spinner loading-spinner--lg"></div>
+                <i class="fas fa-brain marketing-loading-brain"></i>
+            </div>
+            <h2>Generating Strategy</h2>
+            <p>Our AI analyst is processing all available data for <strong>{{ artist.name }}</strong>...</p>
+            <div class="marketing-loading-steps">
+                <div class="loading-step active" id="step-data"><i class="fas fa-database"></i> Gathering intelligence</div>
+                <div class="loading-step" id="step-analyze"><i class="fas fa-chart-bar"></i> Analysing metrics</div>
+                <div class="loading-step" id="step-generate"><i class="fas fa-magic"></i> Generating strategy</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="marketing-content" style="display:none">
+
+        {# ── POSITIONING HERO ── #}
+        <div class="strategy-positioning-card" id="positioning-card">
+            <div class="strategy-positioning-inner">
+                <div class="strategy-career-stage" id="career-stage-badge"></div>
+                <p class="strategy-positioning-text" id="positioning-text"></p>
+            </div>
+        </div>
+
+        {# ── 90-DAY PLAN ── #}
+        <div class="strategy-section mt-4">
+            <div class="strategy-section-header">
+                <i class="fas fa-calendar-check strategy-section-icon"></i>
+                <div>
+                    <h2 class="strategy-section-title">90-Day Action Plan</h2>
+                    <p class="strategy-section-desc">Phased execution roadmap</p>
+                </div>
+            </div>
+            <div class="plan-timeline" id="plan-timeline"></div>
+        </div>
+
+        {# ── QUICK WINS + TARGET AUDIENCE ── #}
+        <div class="strategy-2col mt-4">
+
+            <div class="strategy-card" id="quick-wins-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-bolt strategy-card-icon strategy-card-icon--yellow"></i>
+                    <h3>Quick Wins</h3>
+                </div>
+                <ul class="quick-wins-list" id="quick-wins-list"></ul>
+            </div>
+
+            <div class="strategy-card" id="audience-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-users strategy-card-icon strategy-card-icon--blue"></i>
+                    <h3>Target Audience</h3>
+                </div>
+                <div class="audience-breakdown" id="audience-breakdown"></div>
+            </div>
+
+        </div>
+
+        {# ── GEOGRAPHIC + SOCIAL ── #}
+        <div class="strategy-2col mt-4">
+
+            <div class="strategy-card" id="geo-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-globe strategy-card-icon strategy-card-icon--green"></i>
+                    <h3>Geographic Strategy</h3>
+                </div>
+                <div id="geo-content"></div>
+            </div>
+
+            <div class="strategy-card" id="social-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-share-alt strategy-card-icon strategy-card-icon--pink"></i>
+                    <h3>Social Media Strategy</h3>
+                </div>
+                <div id="social-content"></div>
+            </div>
+
+        </div>
+
+        {# ── PLAYLIST + LABEL + COLLAB ── #}
+        <div class="strategy-3col mt-4">
+
+            <div class="strategy-card" id="playlist-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-list-music strategy-card-icon strategy-card-icon--purple"></i>
+                    <h3>Playlist Strategy</h3>
+                </div>
+                <div id="playlist-content"></div>
+            </div>
+
+            <div class="strategy-card" id="label-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-building strategy-card-icon strategy-card-icon--gold"></i>
+                    <h3>Label Strategy</h3>
+                </div>
+                <div id="label-content"></div>
+            </div>
+
+            <div class="strategy-card" id="collab-card">
+                <div class="strategy-card-header">
+                    <i class="fas fa-handshake strategy-card-icon strategy-card-icon--teal"></i>
+                    <h3>Collaboration Strategy</h3>
+                </div>
+                <div id="collab-content"></div>
+            </div>
+
+        </div>
+
+        {# ── PRESS TARGETS ── #}
+        <div class="strategy-section mt-4" id="press-section">
+            <div class="strategy-section-header">
+                <i class="fas fa-newspaper strategy-section-icon"></i>
+                <div>
+                    <h2 class="strategy-section-title">Press & Media Targets</h2>
+                    <p class="strategy-section-desc">Priority publications for this career stage and genre</p>
+                </div>
+                <a href="{{ url_for('main.artist_pitch', artist_id=artist.id) }}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-bullhorn"></i> Full Pitch Hub
+                </a>
+            </div>
+            <div class="press-grid" id="press-grid"></div>
+        </div>
+
+        {# ── AI DISCLAIMER ── #}
+        <div class="ai-disclaimer mt-4">
+            <i class="fas fa-robot"></i>
+            Strategy generated by Gemini AI based on Spotify, Last.fm, and MusicBrainz data.
+            Verify all information independently before acting.
+        </div>
+
+    </div><!-- /marketing-content -->
+
+    <div id="marketing-error" style="display:none">
+        <div class="empty-state error-state" style="padding:4rem 2rem;">
+            <i class="fas fa-exclamation-triangle" style="font-size:2.5rem; margin-bottom:1rem;"></i>
+            <p id="marketing-error-msg">Could not generate strategy. Please try again.</p>
+            <button class="btn btn-primary mt-3" onclick="loadStrategy()">
+                <i class="fas fa-redo"></i> Retry
+            </button>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    const ARTIST_ID = {{ artist.id | tojson }};
+
+    function setText(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text || '—';
+    }
+
+    function setHTML(id, html) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html || '';
+    }
+
+    function tag(text, cls) {
+        return `<span class="strategy-tag strategy-tag--${cls || 'default'}">${text}</span>`;
+    }
+
+    function renderStrategy(s) {
+        // Positioning
+        const stageCls = {
+            'Underground': 'stage--underground',
+            'Emerging': 'stage--emerging',
+            'Rising': 'stage--rising',
+            'Established': 'stage--established',
+            'Mainstream': 'stage--mainstream',
+        }[s.career_stage] || 'stage--emerging';
+
+        setHTML('career-stage-badge', `<span class="career-stage-pill ${stageCls}">${s.career_stage || 'Unknown'}</span>`);
+        setText('positioning-text', s.positioning);
+
+        // 90-day plan
+        const planEl = document.getElementById('plan-timeline');
+        if (planEl && s.ninety_day_plan) {
+            planEl.innerHTML = s.ninety_day_plan.map((phase, i) => `
+                <div class="plan-phase">
+                    <div class="plan-phase-marker">
+                        <div class="plan-phase-num">${i + 1}</div>
+                        ${i < s.ninety_day_plan.length - 1 ? '<div class="plan-phase-line"></div>' : ''}
+                    </div>
+                    <div class="plan-phase-body">
+                        <div class="plan-phase-header">
+                            <span class="plan-phase-week">Week ${phase.week}</span>
+                            <span class="plan-phase-focus">${phase.focus}</span>
+                        </div>
+                        <ul class="plan-phase-actions">
+                            ${(phase.actions || []).map(a => `<li>${a}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Quick wins
+        const qwEl = document.getElementById('quick-wins-list');
+        if (qwEl && s.quick_wins) {
+            qwEl.innerHTML = s.quick_wins.map(w => `<li><i class="fas fa-check-circle"></i> ${w}</li>`).join('');
+        }
+
+        // Audience
+        if (s.target_audience) {
+            const a = s.target_audience;
+            setHTML('audience-breakdown', `
+                <div class="audience-row">
+                    <span class="audience-label">Primary</span>
+                    <span class="audience-value">${a.primary || '—'}</span>
+                </div>
+                <div class="audience-row">
+                    <span class="audience-label">Secondary</span>
+                    <span class="audience-value">${a.secondary || '—'}</span>
+                </div>
+                <div class="audience-row">
+                    <span class="audience-label">Psychographic</span>
+                    <span class="audience-value">${a.psychographic || '—'}</span>
+                </div>
+                <div class="audience-platforms">
+                    ${(a.top_platforms || []).map(p => tag(p, 'platform')).join('')}
+                </div>
+            `);
+        }
+
+        // Geographic
+        if (s.geographic_strategy) {
+            const g = s.geographic_strategy;
+            setHTML('geo-content', `
+                <div class="geo-markets">
+                    <div class="geo-markets-label">Priority Markets</div>
+                    <div class="geo-markets-tags">${(g.priority_markets || []).map(m => tag(m, 'market')).join('')}</div>
+                </div>
+                <p class="geo-reasoning">${g.reasoning || ''}</p>
+                ${g.expansion_markets && g.expansion_markets.length ? `
+                <div class="geo-markets mt-2">
+                    <div class="geo-markets-label">Expansion Markets</div>
+                    <div class="geo-markets-tags">${g.expansion_markets.map(m => tag(m, 'market-secondary')).join('')}</div>
+                </div>
+                <p class="geo-reasoning">${g.approach || ''}</p>` : ''}
+            `);
+        }
+
+        // Social
+        if (s.social_strategy) {
+            const ss = s.social_strategy;
+            setHTML('social-content', `
+                <div class="social-primary-platform">
+                    <span class="social-platform-name">${ss.primary_platform || '—'}</span>
+                    <p class="social-why">${ss.why || ''}</p>
+                </div>
+                <div class="social-pillars">
+                    <div class="social-pillars-label">Content Pillars</div>
+                    ${(ss.content_pillars || []).map(p => `<div class="social-pillar-item"><i class="fas fa-columns"></i> ${p}</div>`).join('')}
+                </div>
+                <div class="social-detail-row">
+                    <span class="social-detail-label">Cadence</span>
+                    <span class="social-detail-value">${ss.posting_cadence || '—'}</span>
+                </div>
+                <div class="social-detail-row">
+                    <span class="social-detail-label">Growth Tactic</span>
+                    <span class="social-detail-value">${ss.growth_tactic || '—'}</span>
+                </div>
+            `);
+        }
+
+        // Playlist
+        if (s.playlist_strategy) {
+            const ps = s.playlist_strategy;
+            setHTML('playlist-content', `
+                <div class="strategy-kv"><span>Target Tier</span><strong>${ps.target_tier || '—'}</strong></div>
+                <div class="strategy-tags-row">${(ps.genres_to_pitch || []).map(g => tag(g, 'genre')).join('')}</div>
+                <div class="strategy-tags-row">${(ps.mood_keywords || []).map(m => tag(m, 'mood')).join('')}</div>
+                <p class="strategy-advice">${ps.curator_profile || ''}</p>
+                <div class="pitch-tip-inline"><i class="fas fa-lightbulb"></i> ${ps.pitch_tip || ''}</div>
+            `);
+        }
+
+        // Label
+        if (s.label_strategy) {
+            const ls = s.label_strategy;
+            const recCls = ls.recommendation && ls.recommendation.toLowerCase().includes('indie') ? 'rec--indie'
+                : ls.recommendation && ls.recommendation.toLowerCase().includes('major') ? 'rec--major' : 'rec--stay';
+            setHTML('label-content', `
+                <div class="label-rec-badge ${recCls}">${ls.recommendation || '—'}</div>
+                <p class="strategy-advice">${ls.reasoning || ''}</p>
+                <div class="strategy-tags-row">${(ls.target_label_types || []).map(t => tag(t, 'label-type')).join('')}</div>
+                <p class="strategy-advice">${ls.approach || ''}</p>
+            `);
+        }
+
+        // Collaboration
+        if (s.collaboration_strategy) {
+            const cs = s.collaboration_strategy;
+            setHTML('collab-content', `
+                <div class="strategy-kv"><span>Type</span><strong>${cs.collab_type || '—'}</strong></div>
+                <div class="strategy-kv"><span>Target Stage</span><strong>${cs.target_career_stage || '—'}</strong></div>
+                <div class="strategy-kv"><span>Genre Adjacency</span><strong>${cs.genre_adjacency || '—'}</strong></div>
+                <p class="strategy-advice">${cs.approach || ''}</p>
+            `);
+        }
+
+        // Press
+        if (s.press_targets && s.press_targets.length) {
+            setHTML('press-grid', s.press_targets.map(p => `
+                <div class="press-card">
+                    <div class="press-card-icon"><i class="fas fa-newspaper"></i></div>
+                    <div class="press-card-body">
+                        <h4 class="press-outlet-name">${p.outlet}</h4>
+                        <p class="press-outlet-why">${p.why}</p>
+                    </div>
+                </div>
+            `).join(''));
+        }
+    }
+
+    function animateLoadingSteps() {
+        const steps = ['step-data', 'step-analyze', 'step-generate'];
+        let i = 1;
+        return setInterval(() => {
+            if (i < steps.length) {
+                document.querySelectorAll('.loading-step').forEach(s => s.classList.remove('active'));
+                document.getElementById(steps[i])?.classList.add('active');
+                i++;
+            }
+        }, 2000);
+    }
+
+    function loadStrategy() {
+        document.getElementById('marketing-loading').style.display = '';
+        document.getElementById('marketing-content').style.display = 'none';
+        document.getElementById('marketing-error').style.display = 'none';
+
+        const interval = animateLoadingSteps();
+
+        fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
+            .then(r => r.json())
+            .then(data => {
+                clearInterval(interval);
+                document.getElementById('marketing-loading').style.display = 'none';
+
+                if (data.error) {
+                    document.getElementById('marketing-error').style.display = '';
+                    setText('marketing-error-msg', data.error);
+                    return;
+                }
+
+                renderStrategy(data.strategy);
+                document.getElementById('marketing-content').style.display = '';
+            })
+            .catch(err => {
+                clearInterval(interval);
+                document.getElementById('marketing-loading').style.display = 'none';
+                document.getElementById('marketing-error').style.display = '';
+                setText('marketing-error-msg', `Network error: ${err.message}`);
+            });
+    }
+
+    // Auto-load on page open
+    loadStrategy();
+
+    // Expose for retry button
+    window.loadStrategy = loadStrategy;
+
+})();
+</script>
+{% endblock %}

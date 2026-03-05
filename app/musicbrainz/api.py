@@ -257,3 +257,80 @@ def get_label_website(label_mbid):
             url_obj = rel.get('url', {})
             return url_obj.get('resource') if url_obj else None
     return None
+
+
+def get_label_contacts(label_name):
+    """
+    Search MusicBrainz for a label by name and return contact information:
+    official website, social media links, country, and type.
+    Returns a dict or None if not found.
+    """
+    if not label_name:
+        return None
+
+    data = _mb_get('label', {'query': f'label:"{label_name}"', 'limit': 5})
+    if not data or not data.get('labels'):
+        return None
+
+    labels = data['labels']
+    name_lower = label_name.lower()
+
+    best = None
+    for label in labels:
+        if label.get('name', '').lower() == name_lower:
+            best = label
+            break
+    if not best:
+        for label in labels:
+            if int(label.get('score', 0)) >= 85:
+                best = label
+                break
+    if not best and labels:
+        best = labels[0]
+
+    if not best:
+        return None
+
+    mbid = best.get('id')
+    if not mbid:
+        return None
+
+    full = _mb_get(f'label/{mbid}', {'inc': 'url-rels'})
+    if not full:
+        return None
+
+    result = {
+        'mbid': mbid,
+        'name': full.get('name', label_name),
+        'type': full.get('type'),
+        'country': full.get('country'),
+        'website': None,
+        'social_links': [],
+        'other_urls': [],
+    }
+
+    for rel in full.get('relations', []):
+        if rel.get('target-type') != 'url':
+            continue
+        url = rel.get('url', {}).get('resource', '')
+        if not url:
+            continue
+        rel_type = rel.get('type', '').lower()
+
+        if rel_type == 'official homepage':
+            result['website'] = url
+        elif rel_type in ('social network', 'streaming music', 'free streaming',
+                          'video channel', 'music service'):
+            platform, icon = _detect_platform(url)
+            if platform:
+                result['social_links'].append({'platform': platform, 'icon': icon, 'url': url})
+            else:
+                result['other_urls'].append({'label': rel_type.title(), 'url': url})
+        else:
+            platform, icon = _detect_platform(url)
+            if platform:
+                result['social_links'].append({'platform': platform, 'icon': icon, 'url': url})
+
+    print(f"[MusicBrainz] Label '{label_name}': website={bool(result['website'])}, "
+          f"social={len(result['social_links'])}")
+    return result
