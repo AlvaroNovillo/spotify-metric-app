@@ -20,7 +20,7 @@ class Config:
 
     # Gemini API Key
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or "gemini-1.5-flash"
+    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or "gemini-2.0-flash-exp"
 
     # PlaylistSupply Credentials (USE WITH EXTREME CAUTION)
     PLAYLIST_SUPPLY_USER = os.environ.get("PLAYLIST_SUPPLY_USER")

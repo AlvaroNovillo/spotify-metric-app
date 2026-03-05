@@ -129,7 +129,7 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
     """Use Gemini to synthesize all available data into a professional artist profile."""
     try:
         import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
         model = genai.GenerativeModel(model_name)
 
         followers = artist.get('followers', {}).get('total', 0) or 0
@@ -141,6 +141,8 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
         mb_type = mb_data.get('type') if mb_data else None
 
         rstats = release_stats or {}
+        listeners_fmt = f"{lastfm_stats.get('listeners'):,}" if lastfm_stats.get('listeners') else 'N/A'
+        scrobbles_fmt = f"{lastfm_stats.get('scrobbles'):,}" if lastfm_stats.get('scrobbles') else 'N/A'
         prompt = f"""You are a senior music industry analyst. Based on the following data, write a concise 3-paragraph artist intelligence profile. Use specific data points, professional tone, and NO generic filler phrases like "unique blend" or "sonic landscape".
 
 ARTIST DATA:
@@ -151,8 +153,8 @@ Spotify Genres: {', '.join(genres) or 'Not classified'}
 Last.fm Tags: {', '.join(lastfm_tags[:12]) if lastfm_tags else 'N/A'}
 Spotify Followers: {followers:,}
 Popularity Score: {popularity}/100
-Last.fm Weekly Listeners: {lastfm_stats.get('listeners', 'N/A'):,} {'' if not lastfm_stats.get('listeners') else ''}
-Last.fm Total Scrobbles: {lastfm_stats.get('scrobbles', 'N/A')}
+Last.fm Weekly Listeners: {listeners_fmt}
+Last.fm Total Scrobbles: {scrobbles_fmt}
 Total Releases: {rstats.get('total_releases', 'N/A')}
 Active Since: {rstats.get('first_release_year', 'Unknown')}
 Record Labels: {', '.join(artist_labels) if artist_labels else 'Independent'}
@@ -530,7 +532,7 @@ def label_pitch_api(artist_id):
 
     try:
         import google.generativeai as genai
-        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
         model = genai.GenerativeModel(model_name)
 
         roster_str = ', '.join(label_artists[:8]) if label_artists else 'unknown roster'
@@ -656,7 +658,7 @@ def marketing_strategy_api(artist_id):
     market_breakdown = _compute_market_breakdown(available_markets)
 
     import google.generativeai as genai
-    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+    model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash-exp')
     model = genai.GenerativeModel(model_name)
 
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and marketing. Generate a detailed, actionable marketing strategy.
