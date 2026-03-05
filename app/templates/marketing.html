@@ -56,8 +56,9 @@
             <p>Our AI analyst is processing all available data for <strong>{{ artist.name }}</strong>...</p>
             <div class="marketing-loading-steps">
                 <div class="loading-step active" id="step-data"><i class="fas fa-database"></i> Gathering intelligence</div>
-                <div class="loading-step" id="step-analyze"><i class="fas fa-chart-bar"></i> Analysing metrics</div>
-                <div class="loading-step" id="step-generate"><i class="fas fa-magic"></i> Generating strategy</div>
+                <div class="loading-step" id="step-benchmark"><i class="fas fa-trophy"></i> Benchmarking similar artists</div>
+                <div class="loading-step" id="step-analyze"><i class="fas fa-chart-bar"></i> Analysing gaps & opportunities</div>
+                <div class="loading-step" id="step-generate"><i class="fas fa-magic"></i> Building your playbook</div>
             </div>
         </div>
     </div>
@@ -70,6 +71,37 @@
                 <div class="strategy-career-stage" id="career-stage-badge"></div>
                 <p class="strategy-positioning-text" id="positioning-text"></p>
             </div>
+        </div>
+
+        {# ── BENCHMARK PEERS ── #}
+        <div class="strategy-section mt-4" id="benchmarks-section" style="display:none">
+            <div class="strategy-section-header">
+                <i class="fas fa-trophy strategy-section-icon"></i>
+                <div>
+                    <h2 class="strategy-section-title">Benchmark Peers</h2>
+                    <p class="strategy-section-desc">Similar artists who have already broken through — this is where you're headed</p>
+                </div>
+            </div>
+            <div class="benchmark-scroll" id="benchmarks-grid"></div>
+            <div class="benchmark-analysis-bar" id="benchmark-analysis-bar" style="display:none">
+                <div class="ba-item" id="ba-comparison"></div>
+                <div class="ba-divider"></div>
+                <div class="ba-item" id="ba-gap"></div>
+                <div class="ba-divider"></div>
+                <div class="ba-item ba-item--highlight" id="ba-timeline"></div>
+            </div>
+        </div>
+
+        {# ── SUCCESS PLAYBOOK ── #}
+        <div class="strategy-section mt-4" id="playbook-section" style="display:none">
+            <div class="strategy-section-header">
+                <i class="fas fa-book-open strategy-section-icon"></i>
+                <div>
+                    <h2 class="strategy-section-title">Success Playbook</h2>
+                    <p class="strategy-section-desc">Reverse-engineered from artists who made the same jump — steal their moves</p>
+                </div>
+            </div>
+            <div class="playbook-grid" id="playbook-grid"></div>
         </div>
 
         {# ── 90-DAY PLAN ── #}
@@ -389,6 +421,26 @@
             }
         }
 
+        // Benchmark analysis bar
+        if (s.benchmark_analysis) {
+            const ba = s.benchmark_analysis;
+            const barEl = document.getElementById('benchmark-analysis-bar');
+            if (barEl) {
+                document.getElementById('ba-comparison').innerHTML =
+                    `<div class="ba-label">Peer Comparison</div><p>${ba.peer_comparison || '—'}</p>`;
+                document.getElementById('ba-gap').innerHTML =
+                    `<div class="ba-label">Gaps to Close</div><p>${ba.gap_to_close || '—'}</p>`;
+                document.getElementById('ba-timeline').innerHTML =
+                    `<div class="ba-label"><i class="fas fa-clock"></i> Timeline Estimate</div><p>${ba.timeline_estimate || '—'}</p>`;
+                barEl.style.display = '';
+            }
+        }
+
+        // Success playbook
+        if (s.success_playbook && s.success_playbook.length) {
+            renderPlaybook(s.success_playbook);
+        }
+
         // Press
         if (s.press_targets && s.press_targets.length) {
             setHTML('press-grid', s.press_targets.map(p => `
@@ -404,8 +456,88 @@
         }
     }
 
+    function fmtNum(n) {
+        if (!n && n !== 0) return 'N/A';
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+        if (n >= 1_000) return Math.round(n / 1_000) + 'K';
+        return n.toString();
+    }
+
+    function renderBenchmarks(peers) {
+        const section = document.getElementById('benchmarks-section');
+        const grid = document.getElementById('benchmarks-grid');
+        if (!section || !grid || !peers.length) return;
+
+        grid.innerHTML = peers.map(p => {
+            const multiplier = p.followers_multiplier >= 2
+                ? `<span class="bm-multiplier bm-multiplier--high">${p.followers_multiplier}× ahead</span>`
+                : `<span class="bm-multiplier">${p.followers_multiplier}× ahead</span>`;
+            const genreTags = (p.genres || []).map(g => `<span class="bm-genre">${g}</span>`).join('');
+            return `<div class="bm-card">
+                <div class="bm-card-top">
+                    <div class="bm-avatar"><i class="fas fa-music"></i></div>
+                    ${multiplier}
+                </div>
+                <h4 class="bm-name">${p.name}</h4>
+                <div class="bm-stats">
+                    <div class="bm-stat">
+                        <span class="bm-stat-val">${fmtNum(p.followers)}</span>
+                        <span class="bm-stat-lbl">Followers</span>
+                    </div>
+                    <div class="bm-stat">
+                        <span class="bm-stat-val">${p.popularity}</span>
+                        <span class="bm-stat-lbl">Popularity</span>
+                    </div>
+                    <div class="bm-stat">
+                        <span class="bm-stat-val">${p.total_releases}</span>
+                        <span class="bm-stat-lbl">Releases</span>
+                    </div>
+                    <div class="bm-stat">
+                        <span class="bm-stat-val">${p.active_since}</span>
+                        <span class="bm-stat-lbl">Since</span>
+                    </div>
+                </div>
+                ${genreTags ? `<div class="bm-genres">${genreTags}</div>` : ''}
+            </div>`;
+        }).join('');
+
+        section.style.display = '';
+    }
+
+    function renderPlaybook(playbook) {
+        const section = document.getElementById('playbook-section');
+        const grid = document.getElementById('playbook-grid');
+        if (!section || !grid || !playbook || !playbook.length) return;
+
+        grid.innerHTML = playbook.map((entry, i) => `
+            <div class="playbook-card">
+                <div class="playbook-card-index">${i + 1}</div>
+                <div class="playbook-card-body">
+                    <div class="playbook-artist-row">
+                        <span class="playbook-artist-name">${entry.artist}</span>
+                        <span class="playbook-badge">Case Study</span>
+                    </div>
+                    <div class="playbook-step">
+                        <div class="playbook-step-label"><i class="fas fa-history"></i> Then</div>
+                        <p>${entry.snapshot || '—'}</p>
+                    </div>
+                    <div class="playbook-step playbook-step--breakthrough">
+                        <div class="playbook-step-label"><i class="fas fa-bolt"></i> Breakthrough</div>
+                        <p>${entry.breakthrough || '—'}</p>
+                    </div>
+                    <div class="playbook-step playbook-step--lesson">
+                        <div class="playbook-step-label"><i class="fas fa-arrow-right"></i> Your Move</div>
+                        <p><strong>${entry.lesson || '—'}</strong></p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        section.style.display = '';
+    }
+
     function animateLoadingSteps() {
-        const steps = ['step-data', 'step-analyze', 'step-generate'];
+        const steps = ['step-data', 'step-benchmark', 'step-analyze', 'step-generate'];
         let i = 1;
         return setInterval(() => {
             if (i < steps.length) {
@@ -428,6 +560,7 @@
             }
             document.getElementById('marketing-loading').style.display = 'none';
             renderStrategy(cached.strategy);
+            renderBenchmarks(cached.benchmark_peers || []);
             document.getElementById('marketing-content').style.display = '';
             return;
         }
@@ -452,6 +585,7 @@
                 }
 
                 renderStrategy(data.strategy);
+                renderBenchmarks(data.benchmark_peers || []);
                 document.getElementById('marketing-content').style.display = '';
             })
             .catch(err => {

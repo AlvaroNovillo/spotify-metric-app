@@ -669,6 +669,62 @@ def marketing_strategy_api(artist_id):
 
     market_breakdown = _compute_market_breakdown(available_markets)
 
+    # ── Benchmark peers: similar artists with stronger metrics ──────────
+    benchmark_peers = []
+    try:
+        related = sp.artist_related_artists(artist_id).get('artists', [])
+        # Keep only artists meaningfully ahead of the target
+        candidates = [
+            a for a in related
+            if (a.get('popularity', 0) >= popularity + 8
+                or (a.get('followers', {}).get('total', 0) or 0) >= max(followers, 1) * 2)
+            and a.get('popularity', 0) > 0
+        ]
+        candidates.sort(
+            key=lambda x: (x.get('followers', {}).get('total', 0) or 0),
+            reverse=True
+        )
+        from ..spotify.utils import calculate_release_stats as _crs
+        for peer in candidates[:5]:
+            peer_id = peer['id']
+            peer_followers = (peer.get('followers', {}).get('total', 0) or 0)
+            peer_name = peer.get('name', '')
+            peer_genres = peer.get('genres', [])
+            peer_popularity = peer.get('popularity', 0)
+            peer_stats = {}
+            try:
+                peer_releases = sp.artist_albums(peer_id, album_type='album,single', limit=10).get('items', [])
+                peer_stats = _crs(peer_releases) or {}
+            except Exception:
+                pass
+            benchmark_peers.append({
+                'name': peer_name,
+                'followers': peer_followers,
+                'popularity': peer_popularity,
+                'genres': peer_genres[:3],
+                'total_releases': peer_stats.get('total_releases', 'N/A'),
+                'active_since': peer_stats.get('first_release_year', 'Unknown'),
+                'followers_multiplier': round(peer_followers / max(followers, 1), 1),
+            })
+    except Exception as e:
+        print(f"[MarketingAPI] Benchmark peers error: {e}")
+
+    def _fmt_peer(p):
+        genres_str = ', '.join(p['genres']) if p['genres'] else 'similar genre'
+        f = p['followers']
+        f_str = f"{f/1_000_000:.1f}M" if f >= 1_000_000 else f"{f/1_000:.0f}K" if f >= 1_000 else str(f)
+        return (
+            f"  - {p['name']}: {f_str} followers ({p['followers_multiplier']}× target), "
+            f"popularity {p['popularity']}/100, genres: {genres_str}, "
+            f"active since {p['active_since']}, {p['total_releases']} releases"
+        )
+
+    benchmark_section = ""
+    if benchmark_peers:
+        benchmark_section = "BENCHMARK PEERS — Similar artists who have already broken through:\n"
+        benchmark_section += "\n".join(_fmt_peer(p) for p in benchmark_peers)
+        benchmark_section += "\n"
+
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and growth marketing. You have worked with artists across all career stages and genres.
 
 ARTIST INTELLIGENCE DATA:
@@ -685,6 +741,7 @@ ARTIST INTELLIGENCE DATA:
 - Origin / Area: {mb_area or 'Unknown'}
 - Market Presence: {', '.join(f'{k} ({v} countries)' for k, v in market_breakdown.items()) or 'Unknown'}
 
+{benchmark_section}
 CRITICAL RULES — your strategy MUST:
 1. Name SPECIFIC real services, platforms, tools, and publications (e.g. SubmitHub, Groover, Grooveshark, AWAL, Amuse, NME, Pitchfork, KEXP, The Line of Best Fit, etc.) — never generic placeholders.
 2. Give CONCRETE numbers where relevant (e.g. "submit to 15–20 playlist curators per release", "aim for 3 TikTok posts/week", "target labels with rosters under 30 artists").
@@ -761,6 +818,31 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
     "Specific actionable win doable this week",
     "Specific actionable win doable this week",
     "Specific actionable win doable this week"
+  ],
+  "benchmark_analysis": {{
+    "peer_comparison": "1–2 sentences comparing target artist directly to the benchmark peers using specific metric gaps (e.g. 'X has 4× fewer followers than [Peer] despite a similar active-since year').",
+    "gap_to_close": "The 2–3 most critical measurable gaps between target and benchmark peers.",
+    "timeline_estimate": "Realistic timeline to reach the next tier based on benchmark peer trajectories — cite specific peer names."
+  }},
+  "success_playbook": [
+    {{
+      "artist": "One of the real benchmark peer names from the data above",
+      "snapshot": "Where they were ~2–3 years into their career: followers, labels, market presence",
+      "breakthrough": "The single most important move that accelerated their career — be specific (e.g. 'landed editorial playlist X', 'signed to Y label', 'went viral on TikTok via Z content format')",
+      "lesson": "The direct, actionable lesson for {artist_name}: what to copy from this playbook right now"
+    }},
+    {{
+      "artist": "Another benchmark peer name",
+      "snapshot": "Where they were at a comparable stage",
+      "breakthrough": "Their breakthrough move",
+      "lesson": "Direct actionable lesson for {artist_name}"
+    }},
+    {{
+      "artist": "A third benchmark peer or a well-known artist with a similar trajectory even if not in the list",
+      "snapshot": "Where they were at a comparable stage",
+      "breakthrough": "Their breakthrough move",
+      "lesson": "Direct actionable lesson for {artist_name}"
+    }}
   ]
 }}"""
 
@@ -772,7 +854,7 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
         text = re_module.sub(r'\s*```$', '', text)
         import json as json_module
         strategy = json_module.loads(text)
-        return jsonify({'strategy': strategy})
+        return jsonify({'strategy': strategy, 'benchmark_peers': benchmark_peers})
     except Exception as e:
         print(f"[MarketingAPI] Claude/parse error: {e}")
         traceback.print_exc()

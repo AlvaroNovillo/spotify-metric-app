@@ -3015,4 +3015,290 @@
     .press-grid { grid-template-columns: 1fr; }
 
     .modal-checkboxes { grid-template-columns: 1fr; }
+    .benchmark-scroll { gap: 0.75rem; }
+    .bm-card { min-width: 200px; }
+    .playbook-grid { grid-template-columns: 1fr; }
+    .benchmark-analysis-bar { grid-template-columns: 1fr; }
+    .ba-divider { display: none; }
+}
+
+/* ── Benchmark Peers ─────────────────────────────────────────────── */
+.benchmark-scroll {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.75rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(204,164,129,0.2) transparent;
+}
+
+.benchmark-scroll::-webkit-scrollbar { height: 4px; }
+.benchmark-scroll::-webkit-scrollbar-thumb { background: rgba(204,164,129,0.25); border-radius: 2px; }
+
+.bm-card {
+    min-width: 220px;
+    flex-shrink: 0;
+    background: rgba(35, 57, 83, 0.55);
+    border: 1px solid rgba(204, 164, 129, 0.15);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.bm-card:hover {
+    border-color: rgba(204, 164, 129, 0.35);
+    transform: translateY(-3px);
+}
+
+.bm-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.bm-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(204, 164, 129, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 0.85rem;
+}
+
+.bm-multiplier {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(174, 128, 87, 0.15);
+    border: 1px solid rgba(174, 128, 87, 0.3);
+    color: var(--accent-warm);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.bm-multiplier--high {
+    background: rgba(204, 164, 129, 0.18);
+    border-color: rgba(204, 164, 129, 0.4);
+    color: var(--primary);
+}
+
+.bm-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bm-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.bm-stat {
+    background: rgba(204, 164, 129, 0.05);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+    text-align: center;
+}
+
+.bm-stat-val {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.2;
+}
+
+.bm-stat-lbl {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.bm-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.bm-genre {
+    font-size: 0.68rem;
+    background: rgba(204, 164, 129, 0.08);
+    border: 1px solid rgba(204, 164, 129, 0.15);
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    color: var(--text-secondary);
+}
+
+/* ── Benchmark Analysis Bar ──────────────────────────────────────── */
+.benchmark-analysis-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    background: rgba(35, 57, 83, 0.5);
+    border: 1px solid rgba(204, 164, 129, 0.15);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+}
+
+.ba-divider {
+    width: 1px;
+    background: rgba(204, 164, 129, 0.15);
+    align-self: stretch;
+}
+
+.ba-item p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin: 0.4rem 0 0;
+}
+
+.ba-item--highlight p {
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+.ba-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* ── Success Playbook ────────────────────────────────────────────── */
+.playbook-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.playbook-card {
+    background: rgba(35, 57, 83, 0.55);
+    border: 1px solid rgba(204, 164, 129, 0.15);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    transition: border-color var(--transition-fast);
+}
+
+.playbook-card:hover {
+    border-color: rgba(204, 164, 129, 0.3);
+}
+
+.playbook-card-index {
+    width: 40px;
+    flex-shrink: 0;
+    background: rgba(204, 164, 129, 0.1);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 1.25rem;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: rgba(204, 164, 129, 0.35);
+    font-style: italic;
+}
+
+.playbook-card-body {
+    padding: 1.25rem;
+    flex: 1;
+}
+
+.playbook-artist-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.playbook-artist-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.playbook-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    background: rgba(204, 164, 129, 0.12);
+    border: 1px solid rgba(204, 164, 129, 0.25);
+    color: var(--primary);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+}
+
+.playbook-step {
+    margin-bottom: 0.85rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid rgba(204, 164, 129, 0.15);
+}
+
+.playbook-step--breakthrough {
+    border-left-color: rgba(174, 128, 87, 0.5);
+}
+
+.playbook-step--lesson {
+    border-left-color: var(--primary);
+}
+
+.playbook-step-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.playbook-step--breakthrough .playbook-step-label { color: var(--accent-warm); }
+.playbook-step--lesson .playbook-step-label { color: var(--primary); }
+
+.playbook-step p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin: 0;
+}
+
+.playbook-step--lesson p {
+    color: var(--text-main);
+}
+
+/* press-outlet-section (new field) */
+.press-outlet-section {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    background: rgba(204,164,129,0.08);
+    border: 1px solid rgba(204,164,129,0.18);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    margin-bottom: 0.4rem;
 }
