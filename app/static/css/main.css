@@ -17,8 +17,8 @@ body {
     display: flex;
     flex-direction: column;
     background-image:
-        radial-gradient(circle at 15% 50%, rgba(29, 185, 84, 0.08), transparent 25%),
-        radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.08), transparent 25%);
+        radial-gradient(circle at 15% 50%, rgba(204, 164, 129, 0.06), transparent 30%),
+        radial-gradient(circle at 85% 20%, rgba(174, 128, 87, 0.05), transparent 30%);
     background-attachment: fixed;
 }
 
@@ -55,7 +55,6 @@ a {
 
 a:hover {
     color: var(--primary-hover);
-    text-shadow: 0 0 8px var(--primary-glow);
 }
 
 /* Layout Utilities */
@@ -110,7 +109,7 @@ a:hover {
 
 /* Navbar - Glassmorphism */
 .navbar {
-    background: rgba(5, 5, 5, 0.7);
+    background: rgba(26, 42, 61, 0.82);
     backdrop-filter: var(--backdrop-blur);
     -webkit-backdrop-filter: var(--backdrop-blur);
     border-bottom: var(--glass-border);
@@ -130,7 +129,7 @@ a:hover {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    filter: drop-shadow(0 0 2px rgba(29, 185, 84, 0.3));
+    filter: drop-shadow(0 0 4px var(--primary-glow));
 }
 
 .nav-link {
@@ -143,7 +142,7 @@ a:hover {
 
 .nav-link:hover {
     color: var(--text-main);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(204, 164, 129, 0.08);
 }
 
 /* Buttons - Premium Pill Shape */
@@ -173,25 +172,25 @@ a:hover {
 
 .btn-primary {
     background: var(--primary);
-    color: #000;
-    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
+    color: var(--text-on-primary);
+    box-shadow: 0 4px 12px var(--primary-glow);
 }
 
 .btn-primary:hover:not(:disabled) {
     background: var(--primary-hover);
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(29, 185, 84, 0.5);
+    box-shadow: 0 6px 20px var(--primary-glow);
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(204, 164, 129, 0.05);
     color: var(--text-main);
     border: var(--glass-border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(204, 164, 129, 0.12);
+    border-color: rgba(204, 164, 129, 0.3);
     transform: translateY(-2px);
 }
 
@@ -257,8 +256,8 @@ a:hover {
 .form-textarea {
     width: 100%;
     padding: 1rem 1.25rem;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(26, 42, 61, 0.6);
+    border: 1px solid rgba(204, 164, 129, 0.2);
     border-radius: var(--radius-md);
     color: var(--text-main);
     font-family: var(--font-main);
@@ -271,8 +270,8 @@ a:hover {
 .form-textarea:focus {
     outline: none;
     border-color: var(--primary);
-    background: rgba(0, 0, 0, 0.5);
-    box-shadow: 0 0 0 4px rgba(29, 185, 84, 0.1);
+    background: rgba(26, 42, 61, 0.8);
+    box-shadow: 0 0 0 4px rgba(204, 164, 129, 0.12);
 }
 
 /* Animations */
@@ -324,13 +323,13 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(204, 164, 129, 0.2);
     border-radius: 5px;
     border: 2px solid var(--bg-app);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(204, 164, 129, 0.35);
 }
 
 /* Accordion */
@@ -394,9 +393,9 @@ details>div {
 }
 
 .song-item-label:has(input:checked) {
-    background: rgba(29, 185, 84, 0.1);
+    background: rgba(204, 164, 129, 0.1);
     border-color: var(--primary);
-    box-shadow: 0 0 15px rgba(29, 185, 84, 0.1);
+    box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .radio-indicator {
@@ -429,7 +428,7 @@ input:checked+span+.radio-indicator {
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-md);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(204, 164, 129, 0.15);
 }
 
 .section-title {
@@ -446,7 +445,7 @@ input:checked+span+.radio-indicator {
 
 .divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    background: linear-gradient(90deg, transparent, rgba(204, 164, 129, 0.2), transparent);
     margin: var(--spacing-xl) 0;
 }
 
@@ -463,21 +462,21 @@ input:checked+span+.radio-indicator {
 }
 
 .badge-primary {
-    background: rgba(29, 185, 84, 0.15);
+    background: rgba(204, 164, 129, 0.15);
     color: var(--primary);
-    border: 1px solid rgba(29, 185, 84, 0.3);
+    border: 1px solid rgba(204, 164, 129, 0.3);
 }
 
 .badge-secondary {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(204, 164, 129, 0.06);
     color: var(--text-secondary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(204, 164, 129, 0.15);
 }
 
 .badge-info {
-    background: rgba(59, 130, 246, 0.15);
-    color: var(--accent-blue);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(106, 156, 192, 0.15);
+    color: var(--info);
+    border: 1px solid rgba(106, 156, 192, 0.3);
 }
 
 /* Progress Bar */
@@ -499,7 +498,7 @@ input:checked+span+.radio-indicator {
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, var(--primary), var(--accent-blue));
+    background: var(--gradient-main);
     border-radius: 9999px;
     transition: width 0.3s ease;
     box-shadow: 0 0 10px var(--primary-glow);
@@ -536,7 +535,7 @@ input:checked+span+.radio-indicator {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(10, 18, 28, 0.88);
     backdrop-filter: blur(4px);
     z-index: 100;
     display: flex;
@@ -547,11 +546,11 @@ input:checked+span+.radio-indicator {
 }
 
 .modal-content {
-    background: var(--bg-surface);
-    backdrop-filter: blur(12px);
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
     border: var(--glass-border);
     border-radius: var(--radius-xl);
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -560,7 +559,7 @@ input:checked+span+.radio-indicator {
 
 .modal-header {
     padding: var(--spacing-xl);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(204, 164, 129, 0.1);
 }
 
 .modal-body {
@@ -571,7 +570,7 @@ input:checked+span+.radio-indicator {
 
 .modal-footer {
     padding: var(--spacing-lg);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(204, 164, 129, 0.1);
     display: flex;
     justify-content: flex-end;
     gap: var(--spacing-md);
@@ -579,8 +578,8 @@ input:checked+span+.radio-indicator {
 
 /* Info Cards */
 .info-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(204, 164, 129, 0.04);
+    border: 1px solid rgba(204, 164, 129, 0.12);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     margin-bottom: var(--spacing-md);

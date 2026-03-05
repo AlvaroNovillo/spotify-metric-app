@@ -717,9 +717,25 @@
         </li>`;
     }
 
-    fetch(`/api/artist/${ARTIST_ID}/intel`)
-        .then(r => r.json())
-        .then(data => {
+    // ── sessionStorage cache (30 min TTL) ──────────────────────────
+    const CACHE_TTL = 30 * 60 * 1000;
+    function cacheGet(key) {
+        try {
+            const raw = sessionStorage.getItem(key);
+            if (!raw) return null;
+            const { ts, data } = JSON.parse(raw);
+            if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+            return data;
+        } catch(e) { return null; }
+    }
+    function cacheSet(key, data) {
+        try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+    }
+
+    const INTEL_CACHE_KEY = `ft_${ARTIST_ID}_intel`;
+    const cachedIntel = cacheGet(INTEL_CACHE_KEY);
+
+    function processIntelData(data) {
 
             // ── Last.fm Tags ────────────────────────────────────────
             hideLoading('tags-loading');
@@ -738,10 +754,36 @@
             hideLoading('bio-loading');
             const bioEl = document.getElementById('bio-content');
             if (bioEl) {
-                if (data.ai_bio) {
-                    const wikiLink = data.wikipedia && data.wikipedia.page_url
-                        ? `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="bio-read-more">Wikipedia <i class="fas fa-external-link-alt"></i></a>`
-                        : '';
+                const wikiLink = data.wikipedia && data.wikipedia.page_url
+                    ? `<a href="${data.wikipedia.page_url}" target="_blank" rel="noopener noreferrer" class="bio-read-more">Wikipedia <i class="fas fa-external-link-alt"></i></a>`
+                    : '';
+
+                if (data.ai_bio && typeof data.ai_bio === 'object') {
+                    // Structured JSON bio — render as 2×2 highlight cards
+                    const sections = [
+                        { key: 'genre_profile',   icon: 'fas fa-tags',         label: 'Genre Profile' },
+                        { key: 'target_audience', icon: 'fas fa-users',        label: 'Target Audience' },
+                        { key: 'market_snapshot', icon: 'fas fa-chart-bar',    label: 'Market Snapshot' },
+                        { key: 'label_career',    icon: 'fas fa-record-vinyl', label: 'Label & Career' },
+                    ];
+                    const cards = sections.map(s => {
+                        const text = data.ai_bio[s.key] || '';
+                        if (!text) return '';
+                        return `<div class="bio-highlight-card">
+                            <div class="bio-highlight-header">
+                                <i class="${s.icon}"></i>
+                                <span>${s.label}</span>
+                            </div>
+                            <p class="bio-highlight-text">${text}</p>
+                        </div>`;
+                    }).join('');
+                    bioEl.innerHTML = `<div class="bio-highlights-grid">${cards}</div>
+                        <div class="bio-footer">
+                            <span class="ai-bio-badge"><i class="fas fa-robot"></i> AI-generated</span>
+                            ${wikiLink}
+                        </div>`;
+                } else if (data.ai_bio && typeof data.ai_bio === 'string') {
+                    // Fallback plain text
                     bioEl.innerHTML = `<div class="ai-bio-text">${data.ai_bio.replace(/\n\n/g, '</p><p class="bio-text">').replace(/^/, '<p class="bio-text">').replace(/$/, '</p>')}</div>
                         <div class="bio-footer">
                             <span class="ai-bio-badge"><i class="fas fa-robot"></i> AI-generated</span>
@@ -873,20 +915,30 @@
                 }
             }
 
-        })
-        .catch(err => {
-            console.error('Intel API error:', err);
-            // Show graceful fallbacks
-            ['bio-loading', 'tags-loading', 'social-loading', 'labels-loading', 'events-loading'].forEach(hideLoading);
-            const bioEl = document.getElementById('bio-content');
-            if (bioEl) bioEl.innerHTML = '<p class="empty-msg">Could not load additional data.</p>';
-            const evEl = document.getElementById('events-content');
-            if (evEl) evEl.innerHTML = '<p class="empty-msg">Could not load event data.</p>';
-            const socEl = document.getElementById('social-content');
-            if (socEl) socEl.innerHTML = '<p class="empty-msg">Could not load contact data.</p>';
-            const labEl = document.getElementById('labels-content');
-            if (labEl) labEl.innerHTML = '<p class="empty-msg">Could not load label data.</p>';
-        });
+        }  // end processIntelData
+
+    if (cachedIntel) {
+        processIntelData(cachedIntel);
+    } else {
+        fetch(`/api/artist/${ARTIST_ID}/intel`)
+            .then(r => r.json())
+            .then(data => {
+                cacheSet(INTEL_CACHE_KEY, data);
+                processIntelData(data);
+            })
+            .catch(err => {
+                console.error('Intel API error:', err);
+                ['bio-loading', 'tags-loading', 'social-loading', 'labels-loading', 'events-loading'].forEach(hideLoading);
+                const bioEl = document.getElementById('bio-content');
+                if (bioEl) bioEl.innerHTML = '<p class="empty-msg">Could not load additional data.</p>';
+                const evEl = document.getElementById('events-content');
+                if (evEl) evEl.innerHTML = '<p class="empty-msg">Could not load event data.</p>';
+                const socEl = document.getElementById('social-content');
+                if (socEl) socEl.innerHTML = '<p class="empty-msg">Could not load contact data.</p>';
+                const labEl = document.getElementById('labels-content');
+                if (labEl) labEl.innerHTML = '<p class="empty-msg">Could not load label data.</p>';
+            });
+    }
 
 })();
 </script>

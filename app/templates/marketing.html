@@ -200,6 +200,21 @@
 
     const ARTIST_ID = {{ artist.id | tojson }};
 
+    // ── sessionStorage cache (30 min TTL) ──────────────────────────
+    const CACHE_TTL = 30 * 60 * 1000;
+    function cacheGet(key) {
+        try {
+            const raw = sessionStorage.getItem(key);
+            if (!raw) return null;
+            const { ts, data } = JSON.parse(raw);
+            if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+            return data;
+        } catch(e) { return null; }
+    }
+    function cacheSet(key, data) {
+        try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+    }
+
     function setText(id, text) {
         const el = document.getElementById(id);
         if (el) el.textContent = text || '—';
@@ -335,10 +350,11 @@
             const ls = s.label_strategy;
             const recCls = ls.recommendation && ls.recommendation.toLowerCase().includes('indie') ? 'rec--indie'
                 : ls.recommendation && ls.recommendation.toLowerCase().includes('major') ? 'rec--major' : 'rec--stay';
+            const labelsHtml = (ls.target_labels || ls.target_label_types || []).map(t => tag(t, 'label-type')).join('');
             setHTML('label-content', `
                 <div class="label-rec-badge ${recCls}">${ls.recommendation || '—'}</div>
                 <p class="strategy-advice">${ls.reasoning || ''}</p>
-                <div class="strategy-tags-row">${(ls.target_label_types || []).map(t => tag(t, 'label-type')).join('')}</div>
+                ${labelsHtml ? `<div class="strategy-tags-row">${labelsHtml}</div>` : ''}
                 <p class="strategy-advice">${ls.approach || ''}</p>
             `);
         }
@@ -346,12 +362,31 @@
         // Collaboration
         if (s.collaboration_strategy) {
             const cs = s.collaboration_strategy;
+            const examplesHtml = (cs.named_examples || []).map(e => tag(e, 'example')).join('');
             setHTML('collab-content', `
                 <div class="strategy-kv"><span>Type</span><strong>${cs.collab_type || '—'}</strong></div>
-                <div class="strategy-kv"><span>Target Stage</span><strong>${cs.target_career_stage || '—'}</strong></div>
+                <div class="strategy-kv"><span>Target Artist Tier</span><strong>${cs.target_artist_tier || cs.target_career_stage || '—'}</strong></div>
                 <div class="strategy-kv"><span>Genre Adjacency</span><strong>${cs.genre_adjacency || '—'}</strong></div>
+                ${examplesHtml ? `<div class="strategy-tags-row">${examplesHtml}</div>` : ''}
                 <p class="strategy-advice">${cs.approach || ''}</p>
             `);
+        }
+
+        // Sync Licensing (new section)
+        if (s.sync_licensing) {
+            const sl = s.sync_licensing;
+            const libHtml = (sl.libraries_to_submit || []).map(l => tag(l, 'library')).join('');
+            const placementsHtml = (sl.target_placements || []).map(p => tag(p, 'placement')).join('');
+            const syncEl = document.getElementById('sync-content');
+            if (syncEl) {
+                syncEl.innerHTML = `
+                    <div class="strategy-kv"><span>Viability</span><strong>${sl.viability || '—'}</strong></div>
+                    ${placementsHtml ? `<div class="strategy-tags-row">${placementsHtml}</div>` : ''}
+                    ${libHtml ? `<div class="strategy-tags-row">${libHtml}</div>` : ''}
+                    <p class="strategy-advice">${sl.sync_agent_tip || ''}</p>
+                `;
+                syncEl.closest?.('.strategy-card')?.classList.remove('hidden');
+            }
         }
 
         // Press
@@ -361,6 +396,7 @@
                     <div class="press-card-icon"><i class="fas fa-newspaper"></i></div>
                     <div class="press-card-body">
                         <h4 class="press-outlet-name">${p.outlet}</h4>
+                        ${p.section ? `<span class="press-outlet-section">${p.section}</span>` : ''}
                         <p class="press-outlet-why">${p.why}</p>
                     </div>
                 </div>
@@ -380,7 +416,22 @@
         }, 2000);
     }
 
+    const MS_KEY = `ft_${ARTIST_ID}_marketing-strategy`;
+
     function loadStrategy() {
+        const cached = cacheGet(MS_KEY);
+        if (cached) {
+            if (cached.error) {
+                document.getElementById('marketing-error').style.display = '';
+                setText('marketing-error-msg', cached.error);
+                return;
+            }
+            document.getElementById('marketing-loading').style.display = 'none';
+            renderStrategy(cached.strategy);
+            document.getElementById('marketing-content').style.display = '';
+            return;
+        }
+
         document.getElementById('marketing-loading').style.display = '';
         document.getElementById('marketing-content').style.display = 'none';
         document.getElementById('marketing-error').style.display = 'none';
@@ -391,6 +442,7 @@
             .then(r => r.json())
             .then(data => {
                 clearInterval(interval);
+                cacheSet(MS_KEY, data);
                 document.getElementById('marketing-loading').style.display = 'none';
 
                 if (data.error) {
@@ -413,8 +465,8 @@
     // Auto-load on page open
     loadStrategy();
 
-    // Expose for retry button
-    window.loadStrategy = loadStrategy;
+    // Expose for retry button (also clears cache so a retry fetches fresh data)
+    window.loadStrategy = function() { sessionStorage.removeItem(MS_KEY); loadStrategy(); };
 
 })();
 </script>

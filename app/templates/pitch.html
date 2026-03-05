@@ -247,6 +247,21 @@
     const ARTIST_ID = {{ artist.id | tojson }};
     const ARTIST_NAME = {{ artist.name | tojson }};
 
+    // ── sessionStorage cache (30 min TTL) ──────────────────────────
+    const CACHE_TTL = 30 * 60 * 1000;
+    function cacheGet(key) {
+        try {
+            const raw = sessionStorage.getItem(key);
+            if (!raw) return null;
+            const { ts, data } = JSON.parse(raw);
+            if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+            return data;
+        } catch(e) { return null; }
+    }
+    function cacheSet(key, data) {
+        try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+    }
+
     // ── Tab navigation ────────────────────────────────────────────────
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -331,34 +346,36 @@
         if (moreEl) moreEl.style.display = list.length > (count || visibleCount) ? '' : 'none';
     }
 
-    // Load playlists
-    fetch(`/api/artist/${ARTIST_ID}/playlists`)
-        .then(r => r.json())
-        .then(data => {
-            allPlaylists = data.playlists || [];
-            const badge = document.getElementById('playlists-badge');
-            if (badge && allPlaylists.length) { badge.textContent = allPlaylists.length; badge.style.display = ''; }
-
-            const filterBar = document.getElementById('playlist-filters');
-            if (filterBar) filterBar.style.display = '';
-            ['pl-min-followers', 'pl-min-tracks'].forEach(id => {
-                document.getElementById(id)?.addEventListener('change', applyPlaylistFilters);
-            });
-
-            renderPlaylistGrid(allPlaylists);
-
-            const moreBtn = document.getElementById('pl-show-more-btn');
-            if (moreBtn) {
-                moreBtn.addEventListener('click', () => {
-                    visibleCount += 24;
-                    applyPlaylistFilters();
-                });
-            }
-        })
-        .catch(err => {
-            document.getElementById('playlists-content').innerHTML =
-                `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load playlists. ${err.message}</p></div>`;
+    // Load playlists (cached)
+    function processPlaylists(data) {
+        allPlaylists = data.playlists || [];
+        const badge = document.getElementById('playlists-badge');
+        if (badge && allPlaylists.length) { badge.textContent = allPlaylists.length; badge.style.display = ''; }
+        const filterBar = document.getElementById('playlist-filters');
+        if (filterBar) filterBar.style.display = '';
+        ['pl-min-followers', 'pl-min-tracks'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', applyPlaylistFilters);
         });
+        renderPlaylistGrid(allPlaylists);
+        const moreBtn = document.getElementById('pl-show-more-btn');
+        if (moreBtn) {
+            moreBtn.addEventListener('click', () => { visibleCount += 24; applyPlaylistFilters(); });
+        }
+    }
+
+    const PL_KEY = `ft_${ARTIST_ID}_playlists`;
+    const cachedPL = cacheGet(PL_KEY);
+    if (cachedPL) {
+        processPlaylists(cachedPL);
+    } else {
+        fetch(`/api/artist/${ARTIST_ID}/playlists`)
+            .then(r => r.json())
+            .then(data => { cacheSet(PL_KEY, data); processPlaylists(data); })
+            .catch(err => {
+                document.getElementById('playlists-content').innerHTML =
+                    `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load playlists. ${err.message}</p></div>`;
+            });
+    }
 
     // ── Label rendering ───────────────────────────────────────────────
     let allLabels = [];
@@ -489,18 +506,26 @@
         });
     }
 
-    fetch(`/api/artist/${ARTIST_ID}/label-contacts`)
-        .then(r => r.json())
-        .then(data => {
-            allLabels = data.labels || [];
-            const badge = document.getElementById('labels-badge');
-            if (badge && allLabels.length) { badge.textContent = allLabels.length; badge.style.display = ''; }
-            renderLabels(allLabels);
-        })
-        .catch(err => {
-            document.getElementById('labels-content').innerHTML =
-                `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load label data. ${err.message}</p></div>`;
-        });
+    function processLabels(data) {
+        allLabels = data.labels || [];
+        const badge = document.getElementById('labels-badge');
+        if (badge && allLabels.length) { badge.textContent = allLabels.length; badge.style.display = ''; }
+        renderLabels(allLabels);
+    }
+
+    const LC_KEY = `ft_${ARTIST_ID}_label-contacts`;
+    const cachedLC = cacheGet(LC_KEY);
+    if (cachedLC) {
+        processLabels(cachedLC);
+    } else {
+        fetch(`/api/artist/${ARTIST_ID}/label-contacts`)
+            .then(r => r.json())
+            .then(data => { cacheSet(LC_KEY, data); processLabels(data); })
+            .catch(err => {
+                document.getElementById('labels-content').innerHTML =
+                    `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load label data. ${err.message}</p></div>`;
+            });
+    }
 
     // ── Pitch modal ───────────────────────────────────────────────────
     function openPitchModal(label, triggerBtn) {
@@ -567,46 +592,54 @@
         document.body.style.overflow = '';
     }
 
-    // ── Press targets ─────────────────────────────────────────────────
-    fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
-        .then(r => r.json())
-        .then(data => {
-            const strategy = data.strategy;
-            const pressEl = document.getElementById('press-content');
-            if (!pressEl) return;
-            if (!strategy || !strategy.press_targets) {
-                pressEl.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p>No press data available.</p></div>`;
-                return;
-            }
-            pressEl.innerHTML = `<div class="press-grid">${strategy.press_targets.map(p => `
-                <div class="press-card">
-                    <div class="press-card-icon"><i class="fas fa-newspaper"></i></div>
-                    <div class="press-card-body">
-                        <h4 class="press-outlet-name">${p.outlet}</h4>
-                        <p class="press-outlet-why">${p.why}</p>
-                    </div>
+    // ── Press targets (uses cached marketing strategy) ─────────────────
+    function processMarketingForPress(data) {
+        const strategy = data.strategy;
+        const pressEl = document.getElementById('press-content');
+        if (!pressEl) return;
+        if (!strategy || !strategy.press_targets) {
+            pressEl.innerHTML = `<div class="empty-state"><i class="fas fa-newspaper"></i><p>No press data available.</p></div>`;
+            return;
+        }
+        pressEl.innerHTML = `<div class="press-grid">${strategy.press_targets.map(p => `
+            <div class="press-card">
+                <div class="press-card-icon"><i class="fas fa-newspaper"></i></div>
+                <div class="press-card-body">
+                    <h4 class="press-outlet-name">${p.outlet}</h4>
+                    ${p.section ? `<span class="press-outlet-section">${p.section}</span>` : ''}
+                    <p class="press-outlet-why">${p.why}</p>
                 </div>
-            `).join('')}</div>`;
+            </div>
+        `).join('')}</div>`;
 
-            // Show pitch tips from playlist strategy
-            if (strategy.playlist_strategy) {
-                const tipsCard = document.getElementById('press-tips');
-                const tipsList = document.getElementById('press-tips-list');
-                if (tipsCard && tipsList) {
-                    tipsCard.style.display = '';
-                    tipsList.innerHTML = [
-                        strategy.playlist_strategy.pitch_tip,
-                        `Target <strong>${strategy.playlist_strategy.target_tier}</strong> tier playlists first`,
-                        `Mood keywords to use: <strong>${(strategy.playlist_strategy.mood_keywords || []).join(', ')}</strong>`,
-                        strategy.social_strategy ? `Lead platform: <strong>${strategy.social_strategy.primary_platform}</strong> — ${strategy.social_strategy.why}` : null,
-                    ].filter(Boolean).map(t => `<li>${t}</li>`).join('');
-                }
+        if (strategy.playlist_strategy) {
+            const tipsCard = document.getElementById('press-tips');
+            const tipsList = document.getElementById('press-tips-list');
+            if (tipsCard && tipsList) {
+                tipsCard.style.display = '';
+                tipsList.innerHTML = [
+                    strategy.playlist_strategy.pitch_tip,
+                    `Target <strong>${strategy.playlist_strategy.target_tier}</strong> tier playlists first`,
+                    `Mood keywords to use: <strong>${(strategy.playlist_strategy.mood_keywords || []).join(', ')}</strong>`,
+                    strategy.social_strategy ? `Lead platform: <strong>${strategy.social_strategy.primary_platform}</strong> — ${strategy.social_strategy.why}` : null,
+                ].filter(Boolean).map(t => `<li>${t}</li>`).join('');
             }
-        })
-        .catch(err => {
-            const pressEl = document.getElementById('press-content');
-            if (pressEl) pressEl.innerHTML = `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load press data. ${err.message}</p></div>`;
-        });
+        }
+    }
+
+    const MS_KEY = `ft_${ARTIST_ID}_marketing-strategy`;
+    const cachedMS = cacheGet(MS_KEY);
+    if (cachedMS) {
+        processMarketingForPress(cachedMS);
+    } else {
+        fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
+            .then(r => r.json())
+            .then(data => { cacheSet(MS_KEY, data); processMarketingForPress(data); })
+            .catch(err => {
+                const pressEl = document.getElementById('press-content');
+                if (pressEl) pressEl.innerHTML = `<div class="empty-state error-state"><i class="fas fa-exclamation-triangle"></i><p>Could not load press data. ${err.message}</p></div>`;
+            });
+    }
 
 })();
 </script>

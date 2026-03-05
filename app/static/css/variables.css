@@ -1,40 +1,48 @@
 :root {
-    /* Color Palette - Premium Dark Mode */
-    --bg-app: #050505;
-    /* Deepest black */
-    --bg-surface: rgba(20, 20, 20, 0.6);
-    /* Glassy surface */
-    --bg-surface-hover: rgba(30, 30, 30, 0.7);
-    --bg-glass: rgba(10, 10, 10, 0.8);
+    /* ──────────────────────────────────────────────────
+       Color Palette — Warm Earth Tones
+       Java         #CCA481  — primary accent (sandy orange)
+       Honey Brown  #AE8057  — secondary accent (medium warm brown)
+       Swirl        #D3CDC4  — muted / secondary text (light grey-beige)
+       Tender Cream #F1E7DA  — main text / light surface (cream)
+       Nautical     #233953  — dark background base (navy)
+    ────────────────────────────────────────────────── */
 
-    /* Brand Colors - Neon & Vibrant */
-    --primary: #1db954;
-    /* Spotify Green */
-    --primary-hover: #1ed760;
-    --primary-glow: rgba(29, 185, 84, 0.5);
-    --accent-purple: #7c3aed;
-    /* Electric Purple */
-    --accent-blue: #2563eb;
-    /* Royal Blue */
-    --accent-pink: #db2777;
-    /* Hot Pink */
+    /* Backgrounds */
+    --bg-app:             #1a2a3d;          /* deep nautical */
+    --bg-surface:         rgba(35, 57, 83, 0.65);
+    --bg-surface-hover:   rgba(45, 70, 100, 0.75);
+    --bg-glass:           rgba(26, 42, 61, 0.85);
+    --bg-card:            rgba(30, 50, 72, 0.7);
+
+    /* Brand / Accent */
+    --primary:            #CCA481;          /* Java — sandy orange */
+    --primary-hover:      #dab896;
+    --primary-glow:       rgba(204, 164, 129, 0.4);
+    --primary-dark:       #AE8057;          /* Honey Brown */
+    --accent-warm:        #AE8057;          /* Honey Brown */
+    --accent-cool:        #4a7fa5;          /* muted steel blue — keeps contrast */
+    --accent-green:       #7eab8a;          /* muted sage green for success tones */
 
     /* Gradients */
-    --gradient-main: linear-gradient(135deg, #1db954 0%, #3b82f6 100%);
-    --gradient-glow: radial-gradient(circle at center, rgba(29, 185, 84, 0.15) 0%, transparent 70%);
-    --gradient-border: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+    --gradient-main:   linear-gradient(135deg, #CCA481 0%, #AE8057 100%);
+    --gradient-hero:   linear-gradient(160deg, #1a2a3d 0%, #233953 50%, #2a4060 100%);
+    --gradient-glow:   radial-gradient(circle at center, rgba(204, 164, 129, 0.12) 0%, transparent 65%);
+    --gradient-border: linear-gradient(145deg, rgba(204, 164, 129, 0.15), rgba(204, 164, 129, 0.03));
 
-    /* Text Colors */
-    --text-main: #ffffff;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
+    /* Text */
+    --text-main:      #F1E7DA;             /* Tender Cream */
+    --text-secondary: #D3CDC4;             /* Swirl — grey-beige */
+    --text-muted:     rgba(211, 205, 196, 0.55);
+    --text-on-primary: #1a2a3d;            /* dark text on sandy buttons */
 
-    /* Status Colors */
-    --success: #10b981;
-    --error: #ef4444;
-    --warning: #f59e0b;
+    /* Status */
+    --success: #7eab8a;
+    --error:   #d96b6b;
+    --warning: #d4a94a;
+    --info:    #6a9cc0;
 
-    /* Spacing & Layout */
+    /* Spacing */
     --radius-sm: 0.5rem;
     --radius-md: 1rem;
     --radius-lg: 1.5rem;
@@ -47,18 +55,18 @@
     --spacing-xl: 2rem;
 
     /* Transitions */
-    --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast:   0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-normal: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Shadows & Effects */
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.5);
-    --shadow-glow: 0 0 20px var(--primary-glow);
-    --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+    /* Shadows & Glass */
+    --shadow-sm:     0 2px 8px  rgba(0, 0, 0, 0.35);
+    --shadow-md:     0 8px 20px rgba(0, 0, 0, 0.45);
+    --shadow-lg:     0 20px 40px rgba(0, 0, 0, 0.55);
+    --shadow-glow:   0 0 24px var(--primary-glow);
+    --glass-border:  1px solid rgba(204, 164, 129, 0.15);
     --backdrop-blur: blur(16px);
 
-    /* Font Family */
+    /* Font */
     --font-main: 'Outfit', system-ui, -apple-system, sans-serif;
 }

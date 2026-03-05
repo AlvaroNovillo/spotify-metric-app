@@ -1244,13 +1244,60 @@
     margin-bottom: 0.85rem;
 }
 
+/* Structured bio highlight cards (2×2 grid) */
+.bio-highlights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+    .bio-highlights-grid { grid-template-columns: 1fr; }
+}
+
+.bio-highlight-card {
+    background: rgba(204, 164, 129, 0.05);
+    border: 1px solid rgba(204, 164, 129, 0.14);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.1rem;
+    transition: border-color var(--transition-fast);
+}
+
+.bio-highlight-card:hover {
+    border-color: rgba(204, 164, 129, 0.28);
+}
+
+.bio-highlight-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--primary);
+    margin-bottom: 0.55rem;
+}
+
+.bio-highlight-header i {
+    font-size: 0.7rem;
+}
+
+.bio-highlight-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    margin: 0;
+}
+
 .bio-footer {
     display: flex;
     align-items: center;
     gap: 1rem;
     margin-top: 0.5rem;
     padding-top: 0.75rem;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid rgba(204, 164, 129, 0.1);
 }
 
 .ai-bio-badge {
@@ -1260,8 +1307,8 @@
     font-size: 0.7rem;
     font-weight: 600;
     color: var(--text-muted);
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(204, 164, 129, 0.06);
+    border: 1px solid rgba(204, 164, 129, 0.12);
     border-radius: 999px;
     padding: 0.25rem 0.65rem;
     text-transform: uppercase;

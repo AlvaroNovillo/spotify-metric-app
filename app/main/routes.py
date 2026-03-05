@@ -143,7 +143,7 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
         rstats = release_stats or {}
         listeners_fmt = f"{lastfm_stats.get('listeners'):,}" if lastfm_stats.get('listeners') else 'N/A'
         scrobbles_fmt = f"{lastfm_stats.get('scrobbles'):,}" if lastfm_stats.get('scrobbles') else 'N/A'
-        prompt = f"""You are a senior music industry analyst. Based on the following data, write a concise 3-paragraph artist intelligence profile. Use specific data points, professional tone, and NO generic filler phrases like "unique blend" or "sonic landscape".
+        prompt = f"""You are a senior music industry analyst. Analyze the data below and return a structured JSON object — nothing else, no markdown, no code fences, just the raw JSON.
 
 ARTIST DATA:
 Name: {name}
@@ -160,15 +160,28 @@ Active Since: {rstats.get('first_release_year', 'Unknown')}
 Record Labels: {', '.join(artist_labels) if artist_labels else 'Independent'}
 Wikipedia Summary: {wiki_extract[:400] if wiki_extract else 'Not available'}
 
-WRITE:
-Paragraph 1 — Musical Identity: Genre positioning, artistic style, sound characteristics, key influences visible in the data.
-Paragraph 2 — Career Metrics: What the numbers tell us — follower count relative to popularity, release cadence, career stage.
-Paragraph 3 — Market Position & Opportunity: Target audience profile, strongest geographic markets, commercial potential.
-
-Keep total under 280 words. Return plain text only, no headers, no bullet points."""
+Return exactly this JSON structure (all strings, use real data — NO filler phrases like "unique blend"):
+{{
+  "genre_profile": "2–3 sentence description of their exact genre positioning, sub-genres, sonic characteristics and key influences backed by the data.",
+  "target_audience": "2–3 sentences describing the likely fan demographics, listener behavior (e.g. streaming depth vs casual), geographic concentration based on Last.fm and Spotify data.",
+  "market_snapshot": "2–3 sentences on where they stand commercially: follower count vs popularity score analysis, release cadence verdict, career stage (emerging / mid-tier / established).",
+  "label_career": "1–2 sentences on their label history and what it signals about their deal structure or independence."
+}}"""
 
         response = model.generate_content(prompt)
-        return response.text.strip() if response.text else None
+        raw = response.text.strip() if response.text else None
+        if not raw:
+            return None
+        # Strip accidental markdown fences
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1]
+            raw = raw.rsplit('```', 1)[0].strip()
+        import json as _json
+        try:
+            return _json.loads(raw)
+        except Exception:
+            # Fallback: return as plain text so UI still shows something
+            return raw
     except Exception as e:
         print(f"[AI Bio] Gemini error: {e}")
         return None
@@ -661,14 +674,14 @@ def marketing_strategy_api(artist_id):
     model_name = current_app.config.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
     model = genai.GenerativeModel(model_name)
 
-    prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and marketing. Generate a detailed, actionable marketing strategy.
+    prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and growth marketing. You have worked with artists across all career stages and genres.
 
 ARTIST INTELLIGENCE DATA:
 - Name: {artist_name}
 - Genres: {', '.join(genres) or 'Unknown'}
 - Last.fm Tags: {', '.join(lastfm_tags[:15]) or 'N/A'}
 - Spotify Followers: {followers:,}
-- Spotify Popularity: {popularity}/100
+- Spotify Popularity Score: {popularity}/100
 - Last.fm Weekly Listeners: {lastfm_stats.get('listeners', 'N/A')}
 - Last.fm Total Scrobbles: {lastfm_stats.get('scrobbles', 'N/A')}
 - Total Releases: {release_stats_obj.get('total_releases', 'N/A')}
@@ -677,61 +690,83 @@ ARTIST INTELLIGENCE DATA:
 - Origin / Area: {mb_area or 'Unknown'}
 - Market Presence: {', '.join(f'{k} ({v} countries)' for k, v in market_breakdown.items()) or 'Unknown'}
 
+CRITICAL RULES — your strategy MUST:
+1. Name SPECIFIC real services, platforms, tools, and publications (e.g. SubmitHub, Groover, Grooveshark, AWAL, Amuse, NME, Pitchfork, KEXP, The Line of Best Fit, etc.) — never generic placeholders.
+2. Give CONCRETE numbers where relevant (e.g. "submit to 15–20 playlist curators per release", "aim for 3 TikTok posts/week", "target labels with rosters under 30 artists").
+3. Reference REAL named artist examples to illustrate comparisons (e.g. "similar trajectory to Mitski before ANTI- signing" or "comparable positioning to Amyl and the Sniffers in the punk space").
+4. Every action must be immediately doable — no vague advice like "grow your social following".
+5. Do NOT use filler phrases like "unique sound", "authentic connection", or "sonic journey".
+
 Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schema:
 {{
-  "positioning": "2-sentence market positioning statement",
+  "positioning": "Precise 2-sentence market positioning statement using the actual genre tags and data.",
   "career_stage": "Underground | Emerging | Rising | Established | Mainstream",
   "target_audience": {{
-    "primary": "Primary audience description",
-    "secondary": "Secondary audience",
-    "psychographic": "Values, lifestyle, listening habits",
+    "primary": "Specific demographic + behavioral description (age, platforms, listen depth)",
+    "secondary": "Secondary audience segment",
+    "psychographic": "Concrete values, lifestyle markers, and listening contexts (commute, gym, late night, etc.)",
     "top_platforms": ["Platform1", "Platform2", "Platform3"]
   }},
   "geographic_strategy": {{
     "priority_markets": ["Country1", "Country2", "Country3"],
-    "reasoning": "Why these markets based on the data",
+    "reasoning": "Data-backed reasoning for each market choice",
     "expansion_markets": ["Country1", "Country2"],
-    "approach": "Specific geographic expansion approach"
+    "approach": "Concrete geographic expansion steps — e.g. target specific regional blogs, book specific cities, use Spotify geo-targeted ads"
   }},
   "playlist_strategy": {{
-    "target_tier": "micro (< 5K followers) | mid (5K-50K) | major (50K+) | all",
+    "target_tier": "micro (< 5K followers) | mid (5K–50K) | major (50K+) | all tiers",
+    "submission_services": ["SubmitHub", "Groover", "Submithub Editorial", "Playlistsupply"],
     "genres_to_pitch": ["genre1", "genre2", "genre3"],
     "mood_keywords": ["mood1", "mood2", "mood3"],
-    "curator_profile": "Description of ideal playlist curator to target",
-    "pitch_tip": "Specific actionable pitch advice"
+    "curator_profile": "Specific type of curator to target with account size range and subject matter",
+    "pitch_tip": "Concrete pitch tip: what to include in the message, how long, what angle to lead with for this genre"
   }},
   "press_targets": [
-    {{"outlet": "Publication name", "why": "Why this publication fits"}},
-    {{"outlet": "Publication name", "why": "Why this publication fits"}},
-    {{"outlet": "Publication name", "why": "Why this publication fits"}},
-    {{"outlet": "Publication name", "why": "Why this publication fits"}}
+    {{"outlet": "Real publication name", "section": "Specific section/column", "why": "Concrete reason it fits"}},
+    {{"outlet": "Real publication name", "section": "Specific section/column", "why": "Concrete reason it fits"}},
+    {{"outlet": "Real publication name", "section": "Specific section/column", "why": "Concrete reason it fits"}},
+    {{"outlet": "Real publication name", "section": "Specific section/column", "why": "Concrete reason it fits"}},
+    {{"outlet": "Real publication name", "section": "Specific section/column", "why": "Concrete reason it fits"}}
   ],
   "social_strategy": {{
-    "primary_platform": "Most important platform",
-    "why": "Why this platform fits this artist",
-    "content_pillars": ["Pillar1", "Pillar2", "Pillar3"],
-    "posting_cadence": "Recommended frequency and format",
-    "growth_tactic": "Specific growth tactic for this genre"
+    "primary_platform": "Most important platform for this specific genre/demographic",
+    "why": "Concrete data-backed reason",
+    "content_pillars": ["Specific pillar with format", "Specific pillar with format", "Specific pillar with format"],
+    "posting_cadence": "Specific frequency per platform (e.g. TikTok: 4x/week, Instagram: 1x/day Reels + 3x Stories)",
+    "growth_tactic": "Specific tactic with named technique — e.g. 'Duet with 3 mid-tier creators in the [genre] niche weekly', name specific hashtag clusters",
+    "tools": ["Buffer", "Later", "CapCut", "or other relevant tool"]
+  }},
+  "sync_licensing": {{
+    "viability": "High | Medium | Low — with brief reason",
+    "target_placements": ["TV show genre/tone", "Ad category", "Film genre"],
+    "libraries_to_submit": ["Musicbed", "Artlist", "Epidemic Sound", "Pond5", "or genre-appropriate library"],
+    "sync_agent_tip": "Specific advice on approaching sync agents or supervisors for this genre"
   }},
   "label_strategy": {{
-    "recommendation": "Stay indie | Approach indie labels | Approach major labels",
-    "reasoning": "Why, based on current metrics",
-    "target_label_types": ["Type of label 1", "Type of label 2"],
-    "approach": "How to make the pitch"
+    "recommendation": "Stay indie | Approach indie labels | Approach major labels | Distribution deal only",
+    "reasoning": "Metric-backed reasoning (e.g. 'at 25K followers and 60 popularity, you have leverage for a favorable indie deal')",
+    "target_labels": ["Specific real label name 1", "Specific real label name 2", "Specific real label name 3"],
+    "approach": "Concrete pitch approach — e.g. 'cold email A&R at [Label] with last 3 months streaming stats showing X% growth, attach EPK with press quotes'"
   }},
   "collaboration_strategy": {{
-    "collab_type": "Feature | Joint EP | Tour | Co-write | Remix",
-    "target_career_stage": "What level of artist to approach",
-    "genre_adjacency": "Which adjacent genres to target for cross-promotion",
-    "approach": "How to initiate"
+    "collab_type": "Feature | Joint EP | Tour | Co-write | Remix Exchange",
+    "target_artist_tier": "Specific follower/popularity range to target",
+    "named_examples": ["Real artist 1 at similar level", "Real artist 2 at similar level"],
+    "genre_adjacency": "Which adjacent genres offer biggest cross-promo opportunity",
+    "approach": "Concrete outreach method — DM, email, mutual booking agent, etc."
   }},
   "ninety_day_plan": [
-    {{"week": "1–2", "focus": "Focus area", "actions": ["Action 1", "Action 2", "Action 3"]}},
-    {{"week": "3–4", "focus": "Focus area", "actions": ["Action 1", "Action 2", "Action 3"]}},
-    {{"week": "5–8", "focus": "Focus area", "actions": ["Action 1", "Action 2"]}},
-    {{"week": "9–12", "focus": "Focus area", "actions": ["Action 1", "Action 2"]}}
+    {{"week": "1–2", "focus": "Specific focus area", "actions": ["Concrete action with named tool/platform", "Concrete action", "Concrete action"]}},
+    {{"week": "3–4", "focus": "Specific focus area", "actions": ["Concrete action", "Concrete action", "Concrete action"]}},
+    {{"week": "5–8", "focus": "Specific focus area", "actions": ["Concrete action", "Concrete action"]}},
+    {{"week": "9–12", "focus": "Specific focus area", "actions": ["Concrete action", "Concrete action"]}}
   ],
-  "quick_wins": ["Specific quick win 1", "Specific quick win 2", "Specific quick win 3"]
+  "quick_wins": [
+    "Specific actionable win doable this week (name the tool/platform/contact)",
+    "Specific actionable win doable this week",
+    "Specific actionable win doable this week",
+    "Specific actionable win doable this week"
+  ]
 }}"""
 
     try:

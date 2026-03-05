@@ -1,70 +1,436 @@
 {% extends 'base.html' %}
 
-{% block title %}FuzzTracks — Search Artist{% endblock %}
+{% block title %}FuzzTracks — Artist Intelligence{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+/* ── Landing Page Styles ─────────────────────────── */
+.landing-page {
+    min-height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Hero */
+.hero {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 5rem 0 4rem;
+}
+
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 70% 55% at 50% 40%, rgba(204, 164, 129, 0.09) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 80%, rgba(174, 128, 87, 0.05) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* Left column — copy */
+.hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(204, 164, 129, 0.1);
+    border: 1px solid rgba(204, 164, 129, 0.25);
+    border-radius: 9999px;
+    padding: 0.35rem 1rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+}
+
+.hero-eyebrow i {
+    font-size: 0.75rem;
+}
+
+.hero-heading {
+    font-size: clamp(2.4rem, 4vw, 3.6rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    color: var(--text-main);
+    margin-bottom: 1.25rem;
+}
+
+.hero-heading em {
+    font-style: normal;
+    background: var(--gradient-main);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-desc {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    line-height: 1.75;
+    max-width: 42ch;
+    margin-bottom: 2.5rem;
+}
+
+/* Search form */
+.hero-search {
+    background: rgba(35, 57, 83, 0.6);
+    border: 1px solid rgba(204, 164, 129, 0.2);
+    border-radius: var(--radius-lg);
+    padding: 0.45rem 0.45rem 0.45rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 520px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.hero-search:focus-within {
+    border-color: rgba(204, 164, 129, 0.5);
+    box-shadow: 0 0 0 4px rgba(204, 164, 129, 0.08);
+}
+
+.hero-search i {
+    color: var(--text-muted);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.hero-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-main);
+    font-family: var(--font-main);
+    font-size: 1rem;
+    padding: 0.65rem 0;
+}
+
+.hero-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.hero-search-btn {
+    background: var(--primary);
+    color: var(--text-on-primary);
+    border: none;
+    border-radius: calc(var(--radius-lg) - 0.2rem);
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.hero-search-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.02);
+}
+
+.hero-search-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.search-error {
+    color: var(--error);
+    font-size: 0.88rem;
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Capability pills */
+.hero-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 2rem;
+}
+
+.hero-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(204, 164, 129, 0.06);
+    border: 1px solid rgba(204, 164, 129, 0.15);
+    border-radius: 9999px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.hero-pill i {
+    color: var(--primary);
+    font-size: 0.75rem;
+}
+
+/* Right column — feature cards */
+.hero-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.feature-card {
+    background: rgba(35, 57, 83, 0.55);
+    border: 1px solid rgba(204, 164, 129, 0.12);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(204, 164, 129, 0.3), transparent);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.feature-card:hover {
+    border-color: rgba(204, 164, 129, 0.25);
+    background: rgba(45, 70, 100, 0.65);
+    transform: translateX(4px);
+}
+
+.feature-card:hover::before {
+    opacity: 1;
+}
+
+.feature-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.feature-icon--amber { background: rgba(204, 164, 129, 0.15); color: var(--primary); }
+.feature-icon--brown { background: rgba(174, 128, 87, 0.15); color: var(--accent-warm); }
+.feature-icon--blue  { background: rgba(74, 127, 165, 0.15); color: var(--accent-cool); }
+.feature-icon--green { background: rgba(126, 171, 138, 0.15); color: var(--accent-green); }
+
+.feature-text h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.25rem;
+}
+
+.feature-text p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Stats strip */
+.stats-strip {
+    border-top: 1px solid rgba(204, 164, 129, 0.1);
+    padding: 2rem 0;
+    background: rgba(26, 42, 61, 0.3);
+}
+
+.stats-strip-inner {
+    display: flex;
+    justify-content: center;
+    gap: 4rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1;
+    margin-bottom: 0.3rem;
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 3rem; }
+    .hero-visual { display: none; }
+    .stats-strip-inner { gap: 2rem; }
+}
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="search-page">
-    <div class="search-hero">
-        <div class="search-hero-glow"></div>
-        <div class="container search-hero-inner">
-            <h1 class="search-hero-title">Artist Intelligence</h1>
-            <p class="search-hero-subtitle">
-                Deep-dive into any artist: genres, audience reach, discographic contacts,
-                social presence, and playlist opportunities — all in one place.
-            </p>
+<div class="landing-page">
 
-            <form method="GET" action="{{ url_for('main.search_artist') }}" id="search-form" class="search-form-wrap">
-                <div class="search-input-group">
-                    <i class="fas fa-search search-input-icon"></i>
-                    <input
-                        type="text"
-                        name="query"
-                        id="search-input"
-                        placeholder="Search for any artist..."
-                        value="{{ query or '' }}"
-                        autocomplete="off"
-                        class="search-main-input"
-                        required>
-                    <button type="submit" id="search-btn" class="search-submit-btn">
-                        <span class="btn-text">Search</span>
-                        <span class="btn-spinner hidden"><i class="fas fa-spinner fa-spin"></i></span>
-                    </button>
-                </div>
-                {% if error %}
-                <p class="search-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
-                {% endif %}
-            </form>
+    {# ── Hero ─────────────────────────────────────────── #}
+    <section class="hero">
+        <div class="container">
+            <div class="hero-grid">
 
-            <div class="search-features">
-                <div class="search-feature">
-                    <i class="fas fa-globe"></i>
-                    <span>Global audience reach</span>
+                {# Left — copy + search #}
+                <div class="hero-copy">
+                    <div class="hero-eyebrow">
+                        <i class="fas fa-bolt"></i>
+                        Artist Intelligence Platform
+                    </div>
+
+                    <h1 class="hero-heading">
+                        Know every<br>
+                        artist <em>inside out</em>
+                    </h1>
+
+                    <p class="hero-desc">
+                        Spotify metrics, Last.fm audience data, MusicBrainz label contacts,
+                        AI-generated pitch strategies, and playlist opportunities — unified in
+                        one professional dashboard.
+                    </p>
+
+                    <form method="GET" action="{{ url_for('main.search_artist') }}" id="search-form">
+                        <div class="hero-search">
+                            <i class="fas fa-search"></i>
+                            <input
+                                type="text"
+                                name="query"
+                                id="search-input"
+                                class="hero-search-input"
+                                placeholder="Search any artist…"
+                                value="{{ query or '' }}"
+                                autocomplete="off"
+                                required>
+                            <button type="submit" id="search-btn" class="hero-search-btn">
+                                <span class="btn-text"><i class="fas fa-arrow-right"></i> Analyze</span>
+                                <span class="btn-spinner hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                            </button>
+                        </div>
+                        {% if error %}
+                        <p class="search-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</p>
+                        {% endif %}
+                    </form>
+
+                    <div class="hero-pills">
+                        <span class="hero-pill"><i class="fas fa-globe"></i> Audience reach</span>
+                        <span class="hero-pill"><i class="fas fa-address-book"></i> Label contacts</span>
+                        <span class="hero-pill"><i class="fas fa-tags"></i> Genre intel</span>
+                        <span class="hero-pill"><i class="fas fa-headphones"></i> Playlist pitching</span>
+                        <span class="hero-pill"><i class="fas fa-brain"></i> AI strategy</span>
+                    </div>
                 </div>
-                <div class="search-feature">
-                    <i class="fas fa-address-book"></i>
-                    <span>Label & management contacts</span>
+
+                {# Right — feature cards #}
+                <div class="hero-visual">
+                    <div class="feature-card">
+                        <div class="feature-icon feature-icon--amber">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="feature-text">
+                            <h4>Artist Intelligence</h4>
+                            <p>Followers, popularity score, market reach, release history, and AI-synthesised profile from multiple data sources.</p>
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon feature-icon--brown">
+                            <i class="fas fa-record-vinyl"></i>
+                        </div>
+                        <div class="feature-text">
+                            <h4>Label & Management Contacts</h4>
+                            <p>MusicBrainz-sourced record label history, management relationships, and direct outreach opportunities.</p>
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon feature-icon--blue">
+                            <i class="fas fa-music"></i>
+                        </div>
+                        <div class="feature-text">
+                            <h4>Spotify Playlist Pitching</h4>
+                            <p>Discover editorial and independent playlists by genre match. Export curator lists with follower data.</p>
+                        </div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon feature-icon--green">
+                            <i class="fas fa-lightbulb"></i>
+                        </div>
+                        <div class="feature-text">
+                            <h4>AI Marketing Strategy</h4>
+                            <p>Gemini-powered growth plans — press targets, playlist approach, sync licensing, touring strategy, and social tactics.</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="search-feature">
-                    <i class="fas fa-tags"></i>
-                    <span>Genre intelligence</span>
+
+            </div>
+        </div>
+    </section>
+
+    {# ── Stats strip ──────────────────────────────────── #}
+    <div class="stats-strip">
+        <div class="container">
+            <div class="stats-strip-inner">
+                <div class="stat-item">
+                    <span class="stat-value">5+</span>
+                    <span class="stat-label">Data Sources</span>
                 </div>
-                <div class="search-feature">
-                    <i class="fas fa-list-music"></i>
-                    <span>Playlist pitching</span>
+                <div class="stat-item">
+                    <span class="stat-value">AI</span>
+                    <span class="stat-label">Gemini-Powered</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">100M+</span>
+                    <span class="stat-label">Artists Indexed</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">Real-time</span>
+                    <span class="stat-label">Live Data</span>
                 </div>
             </div>
         </div>
     </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-    crossorigin="anonymous" referrerpolicy="no-referrer">
 <script>
 document.getElementById('search-form').addEventListener('submit', function() {
     const btn = document.getElementById('search-btn');
