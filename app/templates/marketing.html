@@ -509,7 +509,19 @@
         const grid = document.getElementById('playbook-grid');
         if (!section || !grid || !playbook || !playbook.length) return;
 
-        grid.innerHTML = playbook.map((entry, i) => `
+        grid.innerHTML = playbook.map((entry, i) => {
+            const metaItems = [];
+            if (entry.manager_agency && entry.manager_agency !== 'Unknown')
+                metaItems.push(`<span class="playbook-meta-item"><i class="fas fa-user-tie"></i> ${entry.manager_agency}</span>`);
+            if (entry.booking_agency && entry.booking_agency !== 'Unknown')
+                metaItems.push(`<span class="playbook-meta-item"><i class="fas fa-calendar-check"></i> ${entry.booking_agency}</span>`);
+            const metaRow = metaItems.length ? `<div class="playbook-meta-row">${metaItems.join('')}</div>` : '';
+
+            const actionSteps = (entry.action_steps && entry.action_steps.length)
+                ? `<ol class="playbook-action-steps">${entry.action_steps.map(s => `<li>${s}</li>`).join('')}</ol>`
+                : '';
+
+            return `
             <div class="playbook-card">
                 <div class="playbook-card-index">${i + 1}</div>
                 <div class="playbook-card-body">
@@ -517,21 +529,32 @@
                         <span class="playbook-artist-name">${entry.artist}</span>
                         <span class="playbook-badge">Case Study</span>
                     </div>
+                    ${metaRow}
                     <div class="playbook-step">
-                        <div class="playbook-step-label"><i class="fas fa-history"></i> Then</div>
+                        <div class="playbook-step-label"><i class="fas fa-history"></i> Where They Were</div>
                         <p>${entry.snapshot || '—'}</p>
                     </div>
+                    ${entry.viral_hit ? `
+                    <div class="playbook-step playbook-step--viral">
+                        <div class="playbook-step-label"><i class="fas fa-fire"></i> Viral Hit</div>
+                        <p>${entry.viral_hit}</p>
+                    </div>` : ''}
                     <div class="playbook-step playbook-step--breakthrough">
-                        <div class="playbook-step-label"><i class="fas fa-bolt"></i> Breakthrough</div>
+                        <div class="playbook-step-label"><i class="fas fa-bolt"></i> Breakthrough Move</div>
                         <p>${entry.breakthrough || '—'}</p>
                     </div>
                     <div class="playbook-step playbook-step--lesson">
-                        <div class="playbook-step-label"><i class="fas fa-arrow-right"></i> Your Move</div>
+                        <div class="playbook-step-label"><i class="fas fa-lightbulb"></i> The Lesson</div>
                         <p><strong>${entry.lesson || '—'}</strong></p>
                     </div>
+                    ${actionSteps ? `
+                    <div class="playbook-step playbook-step--actions">
+                        <div class="playbook-step-label"><i class="fas fa-tasks"></i> Your Action Steps</div>
+                        ${actionSteps}
+                    </div>` : ''}
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
         section.style.display = '';
     }
@@ -548,7 +571,7 @@
         }, 2000);
     }
 
-    const MS_KEY = `ft_${ARTIST_ID}_marketing-strategy`;
+    const MS_KEY = `ft_${ARTIST_ID}_marketing-strategy-v2`;
 
     function loadStrategy() {
         const cached = cacheGet(MS_KEY);

@@ -685,6 +685,7 @@ def marketing_strategy_api(artist_id):
             reverse=True
         )
         from ..spotify.utils import calculate_release_stats as _crs
+        from ..musicbrainz.api import find_artist_mbid as _mb_find, get_artist_intel as _mb_intel
         for peer in candidates[:5]:
             peer_id = peer['id']
             peer_followers = (peer.get('followers', {}).get('total', 0) or 0)
@@ -692,11 +693,41 @@ def marketing_strategy_api(artist_id):
             peer_genres = peer.get('genres', [])
             peer_popularity = peer.get('popularity', 0)
             peer_stats = {}
+            peer_top_track = None
+            peer_top_track_pop = 0
+            peer_manager = None
+            peer_booking_agent = None
+            peer_mb_labels = []
             try:
                 peer_releases = sp.artist_albums(peer_id, album_type='album,single', limit=10).get('items', [])
                 peer_stats = _crs(peer_releases) or {}
             except Exception:
                 pass
+            try:
+                top_tracks = sp.artist_top_tracks(peer_id).get('tracks', [])
+                if top_tracks:
+                    top = max(top_tracks, key=lambda t: t.get('popularity', 0))
+                    peer_top_track = top.get('name')
+                    peer_top_track_pop = top.get('popularity', 0)
+            except Exception:
+                pass
+            # MB lookup only for top 2 peers (1.1s rate limit per call)
+            if len(benchmark_peers) < 2:
+                try:
+                    peer_mbid = _mb_find(peer_name)
+                    if peer_mbid:
+                        peer_mb = _mb_intel(peer_mbid)
+                        if peer_mb:
+                            mgmt = peer_mb.get('management', [])
+                            for m in mgmt:
+                                role = m.get('role', '').lower()
+                                if 'booking' in role or 'agent' in role:
+                                    peer_booking_agent = m['name']
+                                elif 'manag' in role:
+                                    peer_manager = m['name']
+                            peer_mb_labels = [l['name'] for l in peer_mb.get('labels', []) if not l.get('ended')][:2]
+                except Exception:
+                    pass
             benchmark_peers.append({
                 'name': peer_name,
                 'followers': peer_followers,
@@ -705,6 +736,11 @@ def marketing_strategy_api(artist_id):
                 'total_releases': peer_stats.get('total_releases', 'N/A'),
                 'active_since': peer_stats.get('first_release_year', 'Unknown'),
                 'followers_multiplier': round(peer_followers / max(followers, 1), 1),
+                'top_track': peer_top_track,
+                'top_track_popularity': peer_top_track_pop,
+                'manager': peer_manager,
+                'booking_agent': peer_booking_agent,
+                'mb_labels': peer_mb_labels,
             })
     except Exception as e:
         print(f"[MarketingAPI] Benchmark peers error: {e}")
@@ -713,11 +749,20 @@ def marketing_strategy_api(artist_id):
         genres_str = ', '.join(p['genres']) if p['genres'] else 'similar genre'
         f = p['followers']
         f_str = f"{f/1_000_000:.1f}M" if f >= 1_000_000 else f"{f/1_000:.0f}K" if f >= 1_000 else str(f)
-        return (
+        line = (
             f"  - {p['name']}: {f_str} followers ({p['followers_multiplier']}× target), "
             f"popularity {p['popularity']}/100, genres: {genres_str}, "
             f"active since {p['active_since']}, {p['total_releases']} releases"
         )
+        if p.get('top_track'):
+            line += f", biggest track: \"{p['top_track']}\" (popularity {p['top_track_popularity']}/100)"
+        if p.get('manager'):
+            line += f", manager: {p['manager']}"
+        if p.get('booking_agent'):
+            line += f", booking agent: {p['booking_agent']}"
+        if p.get('mb_labels'):
+            line += f", labels: {', '.join(p['mb_labels'])}"
+        return line
 
     benchmark_section = ""
     if benchmark_peers:
@@ -827,21 +872,37 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
   "success_playbook": [
     {{
       "artist": "One of the real benchmark peer names from the data above",
-      "snapshot": "Where they were ~2–3 years into their career: followers, labels, market presence",
-      "breakthrough": "The single most important move that accelerated their career — be specific (e.g. 'landed editorial playlist X', 'signed to Y label', 'went viral on TikTok via Z content format')",
-      "lesson": "The direct, actionable lesson for {artist_name}: what to copy from this playbook right now"
+      "snapshot": "Where they were ~2–3 years into their career: followers, labels, market presence in 1–2 sentences",
+      "viral_hit": "Their most important song or moment — name the exact track/video, when it happened, and what drove it (TikTok trend, editorial playlist add, TV sync, radio campaign, etc.)",
+      "manager_agency": "Their management company or manager name — use the data provided; fill gaps from your own knowledge. If truly unknown write 'Unknown'.",
+      "booking_agency": "Their booking or touring agency — use data provided; fill gaps from your own knowledge. If truly unknown write 'Unknown'.",
+      "breakthrough": "The single most important strategic move that accelerated their career — be specific: name labels, platforms, curators, or campaigns",
+      "lesson": "The direct, actionable lesson for {artist_name} distilled in one sentence",
+      "action_steps": [
+        "Concrete step {artist_name} can take this month that mirrors this case — name the tool, service, or contact",
+        "Second concrete step — specific and measurable",
+        "Third concrete step — specific and measurable"
+      ]
     }},
     {{
       "artist": "Another benchmark peer name",
       "snapshot": "Where they were at a comparable stage",
-      "breakthrough": "Their breakthrough move",
-      "lesson": "Direct actionable lesson for {artist_name}"
+      "viral_hit": "Their key viral or breakout track/moment",
+      "manager_agency": "Their management company or 'Unknown'",
+      "booking_agency": "Their booking agency or 'Unknown'",
+      "breakthrough": "Their breakthrough strategic move",
+      "lesson": "Direct actionable lesson for {artist_name}",
+      "action_steps": ["Step 1", "Step 2", "Step 3"]
     }},
     {{
       "artist": "A third benchmark peer or a well-known artist with a similar trajectory even if not in the list",
       "snapshot": "Where they were at a comparable stage",
-      "breakthrough": "Their breakthrough move",
-      "lesson": "Direct actionable lesson for {artist_name}"
+      "viral_hit": "Their key viral or breakout track/moment",
+      "manager_agency": "Their management company or 'Unknown'",
+      "booking_agency": "Their booking agency or 'Unknown'",
+      "breakthrough": "Their breakthrough strategic move",
+      "lesson": "Direct actionable lesson for {artist_name}",
+      "action_steps": ["Step 1", "Step 2", "Step 3"]
     }}
   ]
 }}"""

@@ -3288,6 +3288,60 @@
     color: var(--text-main);
 }
 
+.playbook-step--viral {
+    border-left-color: #d4a94a;
+}
+
+.playbook-step--viral .playbook-step-label { color: var(--warning); }
+
+.playbook-step--actions {
+    border-left-color: var(--accent-cool);
+    margin-bottom: 0;
+}
+
+.playbook-step--actions .playbook-step-label { color: var(--accent-cool); }
+
+.playbook-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.9rem;
+}
+
+.playbook-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(204, 164, 129, 0.07);
+    border: 1px solid rgba(204, 164, 129, 0.18);
+    border-radius: 999px;
+    padding: 0.2rem 0.65rem;
+}
+
+.playbook-meta-item i {
+    color: var(--primary);
+    font-size: 0.65rem;
+}
+
+.playbook-action-steps {
+    margin: 0.4rem 0 0 0;
+    padding-left: 1.1rem;
+    list-style: decimal;
+}
+
+.playbook-action-steps li {
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin-bottom: 0.35rem;
+    padding-left: 0.25rem;
+}
+
+.playbook-action-steps li:last-child { margin-bottom: 0; }
+
 /* press-outlet-section (new field) */
 .press-outlet-section {
     display: inline-block;
