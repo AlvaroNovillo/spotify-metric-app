@@ -3783,3 +3783,49 @@
 }
 
 .radar-tempo strong { color: var(--text-secondary); }
+
+/* ── Audio DNA Strip (bio card footer) ───────────────────────────── */
+#audio-dna-strip {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+}
+
+.dna-strip-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.dna-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(139,92,246,0.1);
+    border: 1px solid rgba(139,92,246,0.25);
+    border-radius: 999px;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.72rem;
+}
+
+.dna-chip i {
+    color: rgba(139,92,246,0.9);
+    font-size: 0.68rem;
+}
+
+.dna-chip-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.dna-chip-val {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.dna-chip--tempo {
+    background: rgba(16,185,129,0.1);
+    border-color: rgba(16,185,129,0.25);
+}
+
+.dna-chip--tempo i { color: rgba(16,185,129,0.9); }

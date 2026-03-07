@@ -139,6 +139,20 @@
                         <div class="skeleton-block" style="height:1.1rem; width:95%; margin-bottom:.6rem;"></div>
                         <div class="skeleton-block" style="height:1.1rem; width:70%;"></div>
                     </div>
+                    <div id="audio-dna-strip" style="display:none"></div>
+                </div>
+
+                {# Sound Profile Radar — shown when audio data loads #}
+                <div class="intel-card mt-4" id="sound-profile-card" style="display:none">
+                    <div class="intel-card-header">
+                        <i class="fas fa-wave-square card-icon card-icon--purple"></i>
+                        <h3>Sound Profile</h3>
+                        <span class="badge badge-secondary">Audio DNA</span>
+                    </div>
+                    <div class="radar-wrap">
+                        <canvas id="audio-radar" width="300" height="300"></canvas>
+                    </div>
+                    <div class="radar-legend" id="radar-legend"></div>
                 </div>
 
                 {# Top Tracks #}
@@ -466,19 +480,6 @@
                     {% endif %}
                 </div>
 
-                {# Sound Profile Radar #}
-                <div class="intel-card mt-4" id="sound-profile-card" style="display:none">
-                    <div class="intel-card-header">
-                        <i class="fas fa-waveform-lines card-icon card-icon--purple"></i>
-                        <h3>Sound Profile</h3>
-                        <span class="badge badge-secondary">Audio DNA</span>
-                    </div>
-                    <div class="radar-wrap">
-                        <canvas id="audio-radar" width="300" height="300"></canvas>
-                    </div>
-                    <div class="radar-legend" id="radar-legend"></div>
-                </div>
-
                 {# Popularity Context #}
                 <div class="intel-card mt-4">
                     <div class="intel-card-header">
@@ -723,7 +724,6 @@
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
 
-    let _pendingRadarData = null;
     let _radarChartCreated = false;
 
     function createRadarChart(av) {
@@ -802,10 +802,6 @@
             tabContents.forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('tab-' + target)?.classList.add('active');
-            // Lazy-create radar chart when Audience tab becomes visible
-            if (target === 'audience' && _pendingRadarData && !_radarChartCreated) {
-                createRadarChart(_pendingRadarData);
-            }
         });
     });
 
@@ -1046,17 +1042,32 @@
                 }
             }
 
-            // ── Audio Radar ─────────────────────────────────────────
+            // ── Audio Radar + DNA strip ─────────────────────────────
             if (data.audio_averages && Object.keys(data.audio_averages).length > 1) {
-                _pendingRadarData = data.audio_averages;
-                // If Audience tab is already active, render immediately
-                const audienceTab = document.getElementById('tab-audience');
-                if (audienceTab && audienceTab.classList.contains('active')) {
-                    createRadarChart(data.audio_averages);
-                } else {
-                    // Show card placeholder so tab has visual indicator, render on tab click
-                    const card = document.getElementById('sound-profile-card');
-                    if (card) card.style.display = '';
+                createRadarChart(data.audio_averages);
+
+                const strip = document.getElementById('audio-dna-strip');
+                if (strip) {
+                    const av = data.audio_averages;
+                    const chips = [
+                        { k: 'energy',           label: 'Energy',        icon: 'fa-bolt' },
+                        { k: 'danceability',     label: 'Danceability',  icon: 'fa-person-dancing' },
+                        { k: 'valence',          label: 'Mood',          icon: 'fa-face-smile' },
+                        { k: 'acousticness',     label: 'Acoustic',      icon: 'fa-guitar' },
+                        { k: 'instrumentalness', label: 'Instrumental',  icon: 'fa-music' },
+                    ].filter(c => av[c.k] !== undefined).map(c => {
+                        const pct = Math.round(av[c.k] * 100);
+                        return `<div class="dna-chip">
+                            <i class="fas ${c.icon}"></i>
+                            <span class="dna-chip-label">${c.label}</span>
+                            <span class="dna-chip-val">${pct}%</span>
+                        </div>`;
+                    });
+                    const tempoChip = av.tempo
+                        ? `<div class="dna-chip dna-chip--tempo"><i class="fas fa-metronome"></i><span class="dna-chip-label">BPM</span><span class="dna-chip-val">${av.tempo}</span></div>`
+                        : '';
+                    strip.innerHTML = `<div class="dna-strip-inner">${chips.join('')}${tempoChip}</div>`;
+                    strip.style.display = '';
                 }
             }
 

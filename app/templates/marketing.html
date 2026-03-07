@@ -11,18 +11,15 @@
 @media print {
     @page { margin: 1.8cm 1.5cm; size: A4; }
 
-    /* Show only content area */
-    body > *:not(.print-root) { display: none !important; }
-    .print-root { display: block !important; }
-
-    /* Reveal print header */
-    .print-pdf-header { display: flex !important; }
-
-    /* Hide interactive chrome */
+    /* Hide chrome — target specific elements, not body children (content is inside <main>) */
+    nav.navbar, footer { display: none !important; }
     .page-header, #marketing-loading, #marketing-intent, #marketing-error,
     .intent-regenerate-btn, .intent-actions-card-header button,
     .ai-disclaimer button, .strategy-section-header > a.btn,
-    .btn-sm, nav, footer { display: none !important; }
+    .btn-sm { display: none !important; }
+
+    /* Reveal print header */
+    .print-pdf-header { display: flex !important; }
 
     /* Show marketing content always */
     #marketing-content { display: block !important; }
