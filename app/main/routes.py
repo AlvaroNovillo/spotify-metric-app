@@ -3,6 +3,7 @@ import traceback
 import math
 import pandas as pd
 import io
+import requests
 from flask import (
     render_template, redirect, url_for, flash, request, current_app, session, Response, jsonify
 )
@@ -138,8 +139,8 @@ def artist_intel(artist_id):
     )
 
 
-def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, artist_labels, release_stats):
-    """Use Claude to synthesize all available data into a professional artist profile."""
+def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, artist_labels, release_stats, audio_averages=None):
+    """Use Gemini to synthesize all available data into a professional artist profile."""
     try:
 
         followers = artist.get('followers', {}).get('total', 0) or 0
@@ -153,6 +154,26 @@ def _generate_ai_bio(artist, lastfm_tags, lastfm_stats, mb_data, wiki_extract, a
         rstats = release_stats or {}
         listeners_fmt = f"{lastfm_stats.get('listeners'):,}" if lastfm_stats.get('listeners') else 'N/A'
         scrobbles_fmt = f"{lastfm_stats.get('scrobbles'):,}" if lastfm_stats.get('scrobbles') else 'N/A'
+
+        audio_section = 'N/A'
+        if audio_averages:
+            _lbl = {
+                'energy':           ['very low energy','low energy','moderate energy','high energy','very high energy'],
+                'danceability':     ['not danceable','slightly danceable','moderately danceable','danceable','highly danceable'],
+                'valence':          ['dark/melancholic','somewhat dark','neutral mood','upbeat','euphoric'],
+                'acousticness':     ['heavily electronic','mostly electronic','mixed','mostly acoustic','fully acoustic'],
+                'instrumentalness': ['vocal-led','mostly vocal','balanced','mostly instrumental','fully instrumental'],
+            }
+            lines = []
+            for k in ['energy','danceability','valence','acousticness','instrumentalness']:
+                v = audio_averages.get(k)
+                if v is not None:
+                    lbl = _lbl[k][min(int(v * 5), 4)]
+                    lines.append(f"  {k.title()}: {v} ({lbl})")
+            if 'tempo' in audio_averages:
+                lines.append(f"  Tempo: {audio_averages['tempo']} BPM")
+            audio_section = '\n'.join(lines) if lines else 'N/A'
+
         prompt = f"""You are a senior music industry analyst. Analyze the data below and return a structured JSON object — nothing else, no markdown, no code fences, just the raw JSON.
 
 ARTIST DATA:
@@ -169,10 +190,12 @@ Total Releases: {rstats.get('total_releases', 'N/A')}
 Active Since: {rstats.get('first_release_year', 'Unknown')}
 Record Labels: {', '.join(artist_labels) if artist_labels else 'Independent'}
 Wikipedia Summary: {wiki_extract[:400] if wiki_extract else 'Not available'}
+Audio DNA (avg of top tracks):
+{audio_section}
 
 Return exactly this JSON structure (all strings, use real data — NO filler phrases like "unique blend"):
 {{
-  "genre_profile": "2–3 sentence description of their exact genre positioning, sub-genres, sonic characteristics and key influences backed by the data.",
+  "genre_profile": "2–3 sentence description of their exact genre positioning, sub-genres, sonic characteristics and key influences — cite the Audio DNA numbers where available (e.g. 'Energy 0.72 + Acousticness 0.18 signals a high-energy electronic lean').",
   "target_audience": "2–3 sentences describing the likely fan demographics, listener behavior (e.g. streaming depth vs casual), geographic concentration based on Last.fm and Spotify data.",
   "market_snapshot": "2–3 sentences on where they stand commercially: follower count vs popularity score analysis, release cadence verdict, career stage (emerging / mid-tier / established).",
   "label_career": "1–2 sentences on their label history and what it signals about their deal structure or independence."
@@ -193,6 +216,116 @@ Return exactly this JSON structure (all strings, use real data — NO filler phr
     except Exception as e:
         print(f"[AI Bio] Claude error: {e}")
         return None
+
+
+def _parse_intent(intent: str, artist_name: str) -> dict:
+    """
+    Fast Gemini call to extract structured intent from the user's natural language goal.
+    Returns a dict with intent_types, release_name, release_type, is_upcoming,
+    reference_artists, target_markets, timeframe, key_context.
+    Gracefully returns {} on any failure.
+    """
+    if not intent or len(intent) < 5:
+        return {}
+    try:
+        import google.generativeai as genai
+        from flask import current_app
+        api_key = current_app.config.get('GEMINI_API_KEY')
+        model_name = current_app.config.get('GEMINI_MODEL_NAME')
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        prompt = (
+            f'Artist: {artist_name}\n'
+            f'Goal statement: "{intent}"\n\n'
+            'Extract structured intent. Return ONLY a raw JSON object, no markdown, no extra text:\n'
+            '{\n'
+            '  "intent_types": ["release_promo","audience_growth","sync_licensing","touring",'
+            '"label_search","social_growth","collaboration","press_coverage"],\n'
+            '  "release_name": "specific release title if named, else null",\n'
+            '  "release_type": "ep" or "album" or "single" or null,\n'
+            '  "is_upcoming": true if the release is upcoming/unreleased,\n'
+            '  "reference_artists": ["max 3 artist names mentioned for sonic comparison"],\n'
+            '  "target_markets": ["max 4 country or region names explicitly mentioned"],\n'
+            '  "timeframe": "immediate" or "short_term" or "long_term",\n'
+            '  "key_context": "one sentence summarising the core ask"\n'
+            '}\n'
+            'Rules: intent_types must be a list of only the applicable types from the enum. '
+            'reference_artists are ONLY artists explicitly named as sonic references ("sounds like X", "in the vein of X"). '
+            'target_markets are ONLY geographic places explicitly mentioned.'
+        )
+        import re as _re, json as _json
+        resp = model.generate_content(prompt)
+        text = (resp.text or '').strip()
+        m = _re.search(r'\{.*\}', text, _re.DOTALL)
+        if m:
+            return _json.loads(m.group())
+    except Exception as e:
+        print(f'[IntentParse] Error: {e}')
+    return {}
+
+
+def _fetch_reference_artist_context(sp, names: list) -> str:
+    """
+    Given a list of artist names (from the user's intent, e.g. 'sounds like Dominic Fike'),
+    look each one up on Spotify, get their audio DNA via ReccoBeats, and return a
+    formatted context string for the Gemini prompt.
+    """
+    if not names:
+        return ''
+    lines = []
+    for name in names[:3]:
+        try:
+            res = sp.search(q=name, type='artist', limit=1)
+            items = (res.get('artists') or {}).get('items') or []
+            if not items:
+                continue
+            a = items[0]
+            a_name = a.get('name', name)
+            a_pop = a.get('popularity', 0)
+            a_followers = (a.get('followers') or {}).get('total', 0)
+            a_genres = a.get('genres', [])[:3]
+
+            tops = sp.artist_top_tracks(a['id'], country='US').get('tracks', [])[:5]
+            t_ids = [t['id'] for t in tops if t.get('id')]
+            a_audio = {}
+            if t_ids:
+                rb = requests.get(
+                    'https://api.reccobeats.com/v1/audio-features',
+                    params={'ids': ','.join(t_ids)},
+                    timeout=8,
+                )
+                valid_f = [f for f in rb.json().get('content', []) if f]
+                if valid_f:
+                    for key in ['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness']:
+                        a_audio[key] = round(sum(f.get(key, 0) for f in valid_f) / len(valid_f), 2)
+                    a_audio['tempo'] = round(sum(f.get('tempo', 0) for f in valid_f) / len(valid_f))
+
+            f_str = (f'{a_followers/1_000_000:.1f}M' if a_followers >= 1_000_000
+                     else f'{a_followers/1_000:.0f}K' if a_followers >= 1_000
+                     else str(a_followers))
+            line = (f'  - {a_name}: {f_str} followers, popularity {a_pop}/100'
+                    f', genres: {", ".join(a_genres) or "N/A"}')
+            if a_audio:
+                line += (
+                    f'\n    Sonic profile: energy {a_audio.get("energy","?")} | '
+                    f'danceability {a_audio.get("danceability","?")} | '
+                    f'valence {a_audio.get("valence","?")} | '
+                    f'acousticness {a_audio.get("acousticness","?")} | '
+                    f'tempo {a_audio.get("tempo","?")} bpm'
+                )
+            lines.append(line)
+        except Exception as e:
+            print(f'[ReferenceArtist] Error for "{name}": {e}')
+
+    if not lines:
+        return ''
+    return (
+        '\nSOUND REFERENCE ARTISTS (named by artist as sonic benchmarks):\n'
+        + '\n'.join(lines)
+        + '\n→ Use these artists\' audio DNA numbers to calibrate playlist targeting, sync fit, '
+        'and positioning language. The target artist\'s sound MUST be described relative to these '
+        'benchmarks — cite specific metric differences (e.g. "higher energy than Dominic Fike\'s 0.62").\n'
+    )
 
 
 @main_bp.route('/api/artist/<artist_id>/intel')
@@ -277,10 +410,32 @@ def artist_intel_api(artist_id):
     except Exception:
         pass
 
+    # ── Audio features via ReccoBeats ────────────────────────────────────
+    audio_averages = {}
+    try:
+        sp_top = sp.artist_top_tracks(artist_id, country='US').get('tracks', [])[:5]
+        track_ids = [t['id'] for t in sp_top if t.get('id')]
+        if track_ids:
+            rb = requests.get(
+                'https://api.reccobeats.com/v1/audio-features',
+                params={'ids': ','.join(track_ids)},
+                timeout=10,
+            )
+            rb.raise_for_status()
+            valid_f = [f for f in rb.json().get('content', []) if f]
+            if valid_f:
+                for key in ['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness']:
+                    audio_averages[key] = round(sum(f.get(key, 0) for f in valid_f) / len(valid_f), 2)
+                audio_averages['tempo'] = round(sum(f.get('tempo', 0) for f in valid_f) / len(valid_f))
+    except Exception as e:
+        print(f"[IntelAPI] Audio features error: {e}")
+    result['audio_averages'] = audio_averages
+
     try:
         result['ai_bio'] = _generate_ai_bio(
             artist, result['lastfm_tags'], result['lastfm_stats'],
-            result['musicbrainz'], wiki_extract, artist_labels, release_stats
+            result['musicbrainz'], wiki_extract, artist_labels, release_stats,
+            audio_averages=audio_averages,
         )
     except Exception as e:
         print(f"[IntelAPI] AI bio error: {e}")
@@ -608,13 +763,20 @@ def artist_marketing(artist_id):
     return render_template('marketing.html', artist=artist)
 
 
-@main_bp.route('/api/artist/<artist_id>/marketing-strategy')
+@main_bp.route('/api/artist/<artist_id>/marketing-strategy', methods=['GET', 'POST'])
 def marketing_strategy_api(artist_id):
     """Generate a full AI marketing strategy using Gemini."""
     sp = get_spotify_client_credentials_client()
     if not sp:
         return jsonify({'error': 'Spotify unavailable'}), 503
 
+    # Accept intent from POST body or query string
+    intent = ''
+    if request.method == 'POST':
+        body = request.get_json(silent=True) or {}
+        intent = (body.get('intent') or '').strip()[:1500]
+    else:
+        intent = (request.args.get('intent') or '').strip()[:1500]
 
     try:
         artist = sp.artist(artist_id)
@@ -657,6 +819,7 @@ def marketing_strategy_api(artist_id):
         pass
 
     mb_area = None
+    mb_wiki_url = None
     try:
         from ..musicbrainz.api import find_artist_mbid, get_artist_intel
         mbid = find_artist_mbid(artist_name)
@@ -664,18 +827,236 @@ def marketing_strategy_api(artist_id):
             mb = get_artist_intel(mbid)
             if mb:
                 mb_area = mb.get('area') or mb.get('begin_area')
+                mb_wiki_url = mb.get('wikipedia_url')
+    except Exception:
+        pass
+
+    wiki_extract = None
+    try:
+        from ..wikipedia.api import get_artist_summary
+        wiki_data = get_artist_summary(artist_name, mb_wiki_url)
+        if wiki_data:
+            wiki_extract = (wiki_data.get('extract') or '')[:600]
     except Exception:
         pass
 
     market_breakdown = _compute_market_breakdown(available_markets)
 
+    # ── Phase 1: NLP intent parsing ───────────────────────────────────────
+    parsed_intent = {}
+    if intent:
+        try:
+            parsed_intent = _parse_intent(intent, artist_name)
+            print(f"[MarketingAPI] Parsed intent: {parsed_intent}")
+        except Exception as e:
+            print(f"[MarketingAPI] Intent parse failed: {e}")
+
+    p_intent_types  = parsed_intent.get('intent_types') or []
+    p_release_name  = (parsed_intent.get('release_name') or '').strip()
+    p_release_type  = (parsed_intent.get('release_type') or '').lower()
+    p_is_upcoming   = bool(parsed_intent.get('is_upcoming', False))
+    p_ref_artists   = parsed_intent.get('reference_artists') or []
+    p_target_mkts   = parsed_intent.get('target_markets') or []
+    p_timeframe     = parsed_intent.get('timeframe') or 'short_term'
+    p_key_context   = (parsed_intent.get('key_context') or '').strip()
+
+    # ── Top tracks + audio features ──────────────────────────────────────
+    # For sync_licensing intent, fetch more tracks for a broader sonic picture
+    top_track_limit = 10 if 'sync_licensing' in p_intent_types else 5
+    top_tracks_data = []
+    audio_averages = {}
+    try:
+        sp_top = sp.artist_top_tracks(artist_id, country='US').get('tracks', [])[:top_track_limit]
+        top_tracks_data = [
+            {'name': t.get('name', ''), 'popularity': t.get('popularity', 0),
+             'year': (t.get('album', {}).get('release_date', '') or '')[:4]}
+            for t in sp_top
+        ]
+        track_ids = [t['id'] for t in sp_top if t.get('id')]
+        if track_ids:
+            rb_resp = requests.get(
+                'https://api.reccobeats.com/v1/audio-features',
+                params={'ids': ','.join(track_ids)},
+                timeout=10,
+            )
+            rb_resp.raise_for_status()
+            features_list = rb_resp.json().get('content', [])
+            valid_f = [f for f in features_list if f]
+            if valid_f:
+                for key in ['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness']:
+                    audio_averages[key] = round(sum(f.get(key, 0) for f in valid_f) / len(valid_f), 2)
+                audio_averages['tempo'] = round(sum(f.get('tempo', 0) for f in valid_f) / len(valid_f))
+    except Exception as e:
+        print(f"[MarketingAPI] Audio features error: {e}")
+
+    # ── Phase 2a: Release context (driven by parsed intent) ───────────────
+    release_context_section = ""
+    needs_release = (
+        intent and (
+            'release_promo' in p_intent_types
+            or p_release_name
+            or p_release_type
+            or any(kw in intent.lower() for kw in ['ep', 'album', 'single', 'track', 'release'])
+        )
+    )
+    if needs_release:
+        try:
+            all_releases = sp.artist_albums(
+                artist_id, album_type='album,single', limit=20, country='US'
+            ).get('items', [])
+
+            matched_rel = None
+            _intent_lower = intent.lower()
+
+            # 1) Exact name match from NLP-extracted release_name
+            if p_release_name:
+                for rel in all_releases:
+                    if p_release_name.lower() in rel.get('name', '').lower():
+                        matched_rel = rel
+                        break
+
+            # 2) Partial name match: scan all release names against intent text
+            if not matched_rel:
+                for rel in all_releases:
+                    rname = rel.get('name', '').lower()
+                    if rname and len(rname) >= 3 and rname in _intent_lower:
+                        matched_rel = rel
+                        break
+
+            # 3) Type-based fallback using NLP release_type or keyword
+            if not matched_rel and all_releases:
+                rtype = p_release_type or ('ep' if 'ep' in _intent_lower
+                                           else 'album' if 'album' in _intent_lower else '')
+                if rtype:
+                    matched_rel = next(
+                        (r for r in all_releases if r.get('album_type', '').lower() == rtype),
+                        all_releases[0]
+                    )
+                else:
+                    matched_rel = all_releases[0]
+
+            if matched_rel:
+                full_rel = sp.album(matched_rel['id'])
+                rel_tracks = full_rel.get('tracks', {}).get('items', [])[:12]
+                rel_track_ids = [t['id'] for t in rel_tracks if t.get('id')]
+
+                rel_feat_map = {}
+                rel_audio_avgs = {}
+                if rel_track_ids:
+                    rb2 = requests.get(
+                        'https://api.reccobeats.com/v1/audio-features',
+                        params={'ids': ','.join(rel_track_ids)},
+                        timeout=10,
+                    )
+                    rb2.raise_for_status()
+                    rb2_content = rb2.json().get('content', [])
+                    valid_rel_f = [f for f in rb2_content if f]
+                    for j, feat in enumerate(rb2_content):
+                        if feat and j < len(rel_track_ids):
+                            rel_feat_map[rel_track_ids[j]] = feat
+                    if valid_rel_f:
+                        for key in ['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness']:
+                            rel_audio_avgs[key] = round(
+                                sum(f.get(key, 0) for f in valid_rel_f) / len(valid_rel_f), 2
+                            )
+                        rel_audio_avgs['tempo'] = round(
+                            sum(f.get('tempo', 0) for f in valid_rel_f) / len(valid_rel_f)
+                        )
+
+                track_detail_lines = []
+                for t in rel_tracks:
+                    tid = t.get('id', '')
+                    tname = t.get('name', '')
+                    f = rel_feat_map.get(tid)
+                    if f:
+                        track_detail_lines.append(
+                            f"    • \"{tname}\" — "
+                            f"energy:{f.get('energy', 0):.2f}  "
+                            f"dance:{f.get('danceability', 0):.2f}  "
+                            f"valence:{f.get('valence', 0):.2f}  "
+                            f"acousticness:{f.get('acousticness', 0):.2f}  "
+                            f"tempo:{f.get('tempo', 0):.0f} bpm"
+                        )
+                    else:
+                        track_detail_lines.append(f"    • \"{tname}\"")
+
+                rel_audio_str = ""
+                if rel_audio_avgs:
+                    rel_audio_str = (
+                        f"\n  Avg Audio Profile: energy {rel_audio_avgs.get('energy','N/A')} | "
+                        f"danceability {rel_audio_avgs.get('danceability','N/A')} | "
+                        f"valence {rel_audio_avgs.get('valence','N/A')} | "
+                        f"acousticness {rel_audio_avgs.get('acousticness','N/A')} | "
+                        f"tempo {rel_audio_avgs.get('tempo','N/A')} bpm"
+                    )
+
+                rel_type_str = full_rel.get('album_type', 'release').upper()
+                rel_name_str = full_rel.get('name', '')
+                rel_date     = full_rel.get('release_date', 'TBA')
+                rel_label    = full_rel.get('label', 'Independent')
+                rel_markets  = len(full_rel.get('available_markets', []))
+                rel_pop      = full_rel.get('popularity', 0)
+                is_upcoming  = p_is_upcoming or any(
+                    kw in intent.lower()
+                    for kw in ['new', 'upcoming', 'unreleased', 'dropping', 'releasing', 'about to']
+                )
+
+                release_context_section = (
+                    f"\nTARGET RELEASE — \"{rel_name_str}\" ({rel_type_str}):\n"
+                    f"  Release Date: {rel_date}"
+                    f"{'  [UPCOMING — build full pre-release rollout]' if is_upcoming else ''}\n"
+                    f"  Label: {rel_label}\n"
+                    f"  Available in {rel_markets} Spotify markets  |  Popularity: {rel_pop}/100\n"
+                    f"  Tracklist ({len(rel_tracks)} tracks):\n"
+                    f"{chr(10).join(track_detail_lines)}"
+                    f"{rel_audio_str}\n"
+                    f"→ Reference this release by name in EVERY section of the strategy. "
+                    f"Use per-track audio features to assign specific tracks to playlists, sync cues, "
+                    f"and social content moments. "
+                    f"{'Build a staged pre-release rollout in the 90-day plan.' if is_upcoming else ''}\n"
+                )
+        except Exception as e:
+            print(f"[MarketingAPI] Release context error: {e}")
+
+    # ── Phase 2b: Reference artist lookup (sonic benchmarks from intent) ──
+    ref_artists_section = ""
+    if p_ref_artists:
+        try:
+            ref_artists_section = _fetch_reference_artist_context(sp, p_ref_artists)
+        except Exception as e:
+            print(f"[MarketingAPI] Reference artist error: {e}")
+
+    # ── Related artists (shared pool for benchmarks + collabs) ───────────
+    _related_all = []
+    try:
+        _related_all = sp.artist_related_artists(artist_id).get('artists', [])
+    except Exception as e:
+        print(f"[MarketingAPI] Related artists error: {e}")
+
+    # ── Collaboration targets (similar-level artists) ─────────────────────
+    collab_targets = []
+    try:
+        _collab_pool = [
+            a for a in _related_all
+            if a.get('popularity', 0) > 0
+            and (a.get('followers', {}).get('total', 0) or 0) < max(followers, 1) * 2.5
+            and a.get('popularity', 0) < popularity + 10
+        ]
+        _collab_pool.sort(key=lambda x: abs((x.get('followers', {}).get('total', 0) or 0) - followers))
+        collab_targets = [
+            {'name': a.get('name', ''),
+             'followers': (a.get('followers', {}).get('total', 0) or 0),
+             'genres': a.get('genres', [])[:2]}
+            for a in _collab_pool[:5]
+        ]
+    except Exception as e:
+        print(f"[MarketingAPI] Collab targets error: {e}")
+
     # ── Benchmark peers: similar artists with stronger metrics ──────────
     benchmark_peers = []
     try:
-        related = sp.artist_related_artists(artist_id).get('artists', [])
-        # Keep only artists meaningfully ahead of the target
         candidates = [
-            a for a in related
+            a for a in _related_all
             if (a.get('popularity', 0) >= popularity + 8
                 or (a.get('followers', {}).get('total', 0) or 0) >= max(followers, 1) * 2)
             and a.get('popularity', 0) > 0
@@ -745,6 +1126,57 @@ def marketing_strategy_api(artist_id):
     except Exception as e:
         print(f"[MarketingAPI] Benchmark peers error: {e}")
 
+    def _audio_label(key, val):
+        thresholds = {
+            'energy':           ['very low energy', 'low energy', 'moderate energy', 'high energy', 'very high energy'],
+            'danceability':     ['not danceable', 'slightly danceable', 'moderately danceable', 'danceable', 'highly danceable'],
+            'valence':          ['dark/melancholic', 'somewhat dark', 'neutral mood', 'upbeat', 'euphoric/happy'],
+            'acousticness':     ['heavily electronic', 'mostly electronic', 'mixed acoustic/electronic', 'mostly acoustic', 'fully acoustic'],
+            'instrumentalness': ['vocal-dominated', 'mostly vocal', 'balanced', 'mostly instrumental', 'fully instrumental'],
+        }
+        idx = min(int(val * 5), 4)
+        return thresholds.get(key, [''] * 5)[idx]
+
+    tracks_section = "\n".join(
+        f'  {i+1}. "{t["name"]}" — popularity {t["popularity"]}/100 ({t["year"] or "N/A"})'
+        for i, t in enumerate(top_tracks_data)
+    ) if top_tracks_data else "  N/A"
+
+    audio_lines = [
+        f"  - {k.title()}: {audio_averages[k]} → {_audio_label(k, audio_averages[k])}"
+        for k in ['energy', 'danceability', 'valence', 'acousticness', 'instrumentalness']
+        if k in audio_averages
+    ]
+    if 'tempo' in audio_averages:
+        audio_lines.append(f"  - Tempo: {audio_averages['tempo']} BPM")
+    audio_section = "\n".join(audio_lines) if audio_lines else "  N/A"
+
+    engagement_ratio_str = "N/A"
+    try:
+        _scr = int(lastfm_stats.get('scrobbles') or 0)
+        _lst = int(lastfm_stats.get('listeners') or 0)
+        if _lst > 0:
+            _r = round(_scr / _lst, 1)
+            if _r >= 50:   _elbl = "very high repeat listening — dedicated cult fanbase"
+            elif _r >= 20: _elbl = "high repeat listening — loyal core audience"
+            elif _r >= 8:  _elbl = "moderate engagement — growing but mixed listener depth"
+            else:          _elbl = "low repeat rate — mostly passive/discovery listeners"
+            engagement_ratio_str = f"{_r} ({_elbl})"
+    except Exception:
+        pass
+
+    collab_section = "\n".join(
+        "  - {name}: {f_str} followers, genres: {genres}".format(
+            name=c['name'],
+            f_str=f"{c['followers']/1_000_000:.1f}M" if c['followers'] >= 1_000_000
+                  else f"{c['followers']/1_000:.0f}K" if c['followers'] >= 1_000
+                  else str(c['followers']),
+            genres=', '.join(c['genres']) or 'similar genre'
+        ) for c in collab_targets
+    ) if collab_targets else "  N/A"
+
+    wiki_section = wiki_extract[:500] if wiki_extract else "Not available"
+
     def _fmt_peer(p):
         genres_str = ', '.join(p['genres']) if p['genres'] else 'similar genre'
         f = p['followers']
@@ -770,9 +1202,38 @@ def marketing_strategy_api(artist_id):
         benchmark_section += "\n".join(_fmt_peer(p) for p in benchmark_peers)
         benchmark_section += "\n"
 
+    if intent:
+        _intent_meta_lines = [f'"{intent}"']
+        if p_key_context:
+            _intent_meta_lines.append(f'Core ask: {p_key_context}')
+        if p_intent_types:
+            _intent_meta_lines.append(f'Primary objectives: {", ".join(p_intent_types)}')
+        if p_timeframe:
+            _intent_meta_lines.append(
+                f'Timeframe: {p_timeframe.replace("_", " ")} '
+                f'({"< 2 weeks" if p_timeframe == "immediate" else "1–3 months" if p_timeframe == "short_term" else "3+ months"})'
+            )
+        if p_target_mkts:
+            _intent_meta_lines.append(f'Target markets explicitly mentioned: {", ".join(p_target_mkts)}')
+        if release_context_section:
+            _intent_meta_lines.append('A specific release has been identified below — reference it by name throughout every section.')
+        if p_ref_artists:
+            _intent_meta_lines.append(
+                f'Sonic reference artists (mentioned by artist): {", ".join(p_ref_artists)} — '
+                'their audio profiles are provided below; use them to calibrate all recommendations.'
+            )
+        intent_block = (
+            'ARTIST GOAL / RELEASE INTENT:\n'
+            + '\n'.join(_intent_meta_lines) + '\n'
+            + '→ Every section of your strategy MUST directly serve this goal.\n'
+            + '→ intent_actions must give the 5 most specific, immediately actionable steps for exactly this goal.\n\n'
+        )
+    else:
+        intent_block = ""
+
     prompt = f"""You are a senior music industry strategist with 20 years of experience in artist development, A&R, and growth marketing. You have worked with artists across all career stages and genres.
 
-ARTIST INTELLIGENCE DATA:
+{intent_block}ARTIST INTELLIGENCE DATA:
 - Name: {artist_name}
 - Genres: {', '.join(genres) or 'Unknown'}
 - Last.fm Tags: {', '.join(lastfm_tags[:15]) or 'N/A'}
@@ -785,14 +1246,34 @@ ARTIST INTELLIGENCE DATA:
 - Record Labels: {', '.join(artist_labels) or 'Independent'}
 - Origin / Area: {mb_area or 'Unknown'}
 - Market Presence: {', '.join(f'{k} ({v} countries)' for k, v in market_breakdown.items()) or 'Unknown'}
+- Top Markets: {', '.join(available_markets[:10]) or 'Unknown'}
 
+TOP TRACKS (Spotify):
+{tracks_section}
+
+AUDIO DNA (average of top {len(top_tracks_data)} tracks):
+{audio_section}
+
+AUDIENCE ENGAGEMENT:
+- Scrobble/Listener ratio: {engagement_ratio_str}
+
+COLLABORATION OPPORTUNITIES (similar-level artists to target):
+{collab_section}
+
+ARTIST BACKGROUND (Wikipedia):
+{wiki_section}
+{ref_artists_section}{release_context_section}
 {benchmark_section}
 CRITICAL RULES — your strategy MUST:
-1. Name SPECIFIC real services, platforms, tools, and publications (e.g. SubmitHub, Groover, Grooveshark, AWAL, Amuse, NME, Pitchfork, KEXP, The Line of Best Fit, etc.) — never generic placeholders.
+1. Name SPECIFIC real services, platforms, tools, and publications (e.g. SubmitHub, Groover, AWAL, Amuse, NME, Pitchfork, KEXP, The Line of Best Fit, etc.) — never generic placeholders.
 2. Give CONCRETE numbers where relevant (e.g. "submit to 15–20 playlist curators per release", "aim for 3 TikTok posts/week", "target labels with rosters under 30 artists").
 3. Reference REAL named artist examples to illustrate comparisons (e.g. "similar trajectory to Mitski before ANTI- signing" or "comparable positioning to Amyl and the Sniffers in the punk space").
 4. Every action must be immediately doable — no vague advice like "grow your social following".
 5. Do NOT use filler phrases like "unique sound", "authentic connection", or "sonic journey".
+6. Reference the artist's ACTUAL top track names (listed above) in social strategy, content hooks, and quick wins — never say "your music" generically.
+7. Use the AUDIO DNA numbers to justify every playlist mood keyword, sync placement, and energy profile — cite the actual metric values (e.g. "energy 0.82 signals high-intensity workout playlists").
+8. The collaboration_strategy named_examples MUST use artists from the Collaboration Opportunities list above — these are real, similarly-sized artists in their ecosystem.
+{f"9. SOUND REFERENCE ARTISTS are provided above — always position the target artist relative to them with specific metric comparisons (e.g. 'higher valence than Dominic Fike\\'s 0.41'). These are the artist\\'s own stated inspirations." if ref_artists_section else ""}
 
 Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schema:
 {{
@@ -848,9 +1329,10 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
   "collaboration_strategy": {{
     "collab_type": "Feature | Joint EP | Tour | Co-write | Remix Exchange",
     "target_artist_tier": "Specific follower/popularity range to target",
-    "named_examples": ["Real artist 1 at similar level", "Real artist 2 at similar level"],
-    "genre_adjacency": "Which adjacent genres offer biggest cross-promo opportunity",
-    "approach": "Concrete outreach method — DM, email, mutual booking agent, etc."
+    "named_examples": ["Artist from the Collaboration Opportunities list above — name exactly", "Second artist from the list"],
+    "outreach_angle": "Specific opening angle for each named artist — what shared ground to reference (genre overlap, shared label space, similar audience)",
+    "genre_adjacency": "Which adjacent genre from the data offers biggest cross-promo opportunity and why",
+    "approach": "Concrete outreach method — DM, email, mutual booking agent, sync supervisor connection, etc."
   }},
   "ninety_day_plan": [
     {{"week": "1–2", "focus": "Specific focus area", "actions": ["Concrete action with named tool/platform", "Concrete action", "Concrete action"]}},
@@ -864,6 +1346,20 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
     "Specific actionable win doable this week",
     "Specific actionable win doable this week"
   ],
+  "audio_strategy": {{
+    "mood_profile": "1-sentence characterization of the artist's sound using the Audio DNA numbers — state the exact values and what editorial tier/context they signal (e.g. 'Energy 0.82 + Valence 0.28 = dark, high-intensity electronic suited for late-night and workout editorial')",
+    "top_playlists_to_target": [
+      "Specific named playlist archetype + mood/energy justification from the Audio DNA data",
+      "Second specific playlist archetype",
+      "Third specific playlist archetype"
+    ],
+    "standout_track": "Name the top track from the list above, cite its popularity score, and explain why it should lead all pitches (mood fit, recency, streaming momentum)",
+    "sync_fit": {{
+      "tv_drama": "High/Medium/Low — cite the specific audio metric that justifies this",
+      "ad_campaigns": "High/Medium/Low — cite the specific audio metric",
+      "sports_fitness": "High/Medium/Low — cite the specific audio metric"
+    }}
+  }},
   "benchmark_analysis": {{
     "peer_comparison": "1–2 sentences comparing target artist directly to the benchmark peers using specific metric gaps (e.g. 'X has 4× fewer followers than [Peer] despite a similar active-since year').",
     "gap_to_close": "The 2–3 most critical measurable gaps between target and benchmark peers.",
@@ -904,7 +1400,20 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
       "lesson": "Direct actionable lesson for {artist_name}",
       "action_steps": ["Step 1", "Step 2", "Step 3"]
     }}
-  ]
+  ],
+  "intent_actions": {{
+    "goal": "{intent if intent else 'The primary goal most likely to move the needle for this artist right now, based on career stage and data.'}",
+    "priority_focus": "The single most critical strategic area to focus on to achieve this goal — one of: playlist_strategy / press / social / sync / label / collaboration / geographic",
+    "immediate_steps": [
+      "Step 1 — actionable this week, name the exact tool, platform, or person to contact",
+      "Step 2 — specific and measurable",
+      "Step 3",
+      "Step 4",
+      "Step 5"
+    ],
+    "success_metric": "The one KPI or milestone that proves progress toward this goal (e.g. '3 editorial playlist adds', '5 press features', '10K new followers')",
+    "timeline": "Realistic timeframe to achieve this goal given the artist's current metrics"
+  }}
 }}"""
 
     try:
@@ -915,7 +1424,7 @@ Return ONLY a valid JSON object. No markdown. No explanation. Exactly this schem
         text = re_module.sub(r'\s*```$', '', text)
         import json as json_module
         strategy = json_module.loads(text)
-        return jsonify({'strategy': strategy, 'benchmark_peers': benchmark_peers})
+        return jsonify({'strategy': strategy, 'benchmark_peers': benchmark_peers, 'intent': intent})
     except Exception as e:
         print(f"[MarketingAPI] Claude/parse error: {e}")
         traceback.print_exc()

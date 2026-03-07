@@ -6,6 +6,127 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+/* ── Print / PDF Export ───────────────────────────────────────────── */
+@media print {
+    @page { margin: 1.8cm 1.5cm; size: A4; }
+
+    /* Show only content area */
+    body > *:not(.print-root) { display: none !important; }
+    .print-root { display: block !important; }
+
+    /* Reveal print header */
+    .print-pdf-header { display: flex !important; }
+
+    /* Hide interactive chrome */
+    .page-header, #marketing-loading, #marketing-intent, #marketing-error,
+    .intent-regenerate-btn, .intent-actions-card-header button,
+    .ai-disclaimer button, .strategy-section-header > a.btn,
+    .btn-sm, nav, footer { display: none !important; }
+
+    /* Show marketing content always */
+    #marketing-content { display: block !important; }
+
+    /* Reset dark theme → clean white */
+    body, html { background: white !important; color: #111 !important; }
+
+    .intent-actions-card {
+        background: #f5f0ff !important; border: 1px solid #7c3aed !important;
+        border-radius: 8px !important; padding: 1rem !important; margin-bottom: 1rem !important;
+    }
+    .intent-actions-card-header h2 { color: #3b0764 !important; font-size: 1rem !important; }
+    .intent-priority-badge { background: #ede9fe !important; color: #5b21b6 !important; border-color: #a78bfa !important; }
+    .intent-step-item { background: #faf5ff !important; border-color: #c4b5fd !important; border-radius: 6px !important; }
+    .intent-step-num { background: #ede9fe !important; color: #5b21b6 !important; border-color: #a78bfa !important; }
+    .intent-step-item p, .intent-metric-value { color: #333 !important; }
+    .intent-metric-item { background: #faf5ff !important; border-color: #ddd8fe !important; }
+    .intent-metric-label { color: #555 !important; }
+
+    .strategy-positioning-card { background: #f0fdf4 !important; border: 1px solid #86efac !important; border-radius: 8px !important; }
+    .career-stage-pill { border-width: 1px !important; }
+    .strategy-positioning-text { color: #333 !important; font-style: italic; }
+
+    .strategy-section { background: #fafafa !important; border: 1px solid #e5e7eb !important; border-radius: 8px !important; }
+    .strategy-section-title { color: #111 !important; }
+    .strategy-section-desc, .strategy-section-icon { color: #555 !important; }
+
+    .strategy-card { background: white !important; border: 1px solid #e5e7eb !important; border-radius: 8px !important; }
+    .strategy-card-header h3 { color: #111 !important; }
+    .strategy-card-icon { background: #f3f4f6 !important; }
+    .strategy-advice, .geo-reasoning, .social-why, .audio-strat-text { color: #444 !important; }
+    .audience-label, .geo-markets-label, .social-pillars-label, .social-detail-label { color: #666 !important; }
+    .audience-value, .social-detail-value, .social-platform-name { color: #222 !important; }
+    .social-pillar-item { color: #333 !important; }
+    .social-pillar-item i { color: #888 !important; }
+    .strategy-kv span { color: #666 !important; }
+    .strategy-kv strong { color: #222 !important; }
+    .pitch-tip-inline { background: #fffbeb !important; border-color: #fcd34d !important; color: #444 !important; }
+    .pitch-tip-inline i { color: #d97706 !important; }
+
+    .strategy-tag { border-width: 1px !important; }
+    .label-rec-badge { border-width: 1px !important; }
+
+    .plan-phase-num { background: #16a34a !important; }
+    .plan-phase-line { background: #e5e7eb !important; }
+    .plan-phase-focus { color: #111 !important; }
+    .plan-phase-week { background: #f0fdf4 !important; color: #15803d !important; border-color: #86efac !important; }
+    .plan-phase-actions li { color: #444 !important; }
+    .plan-phase-actions li::before { color: #16a34a !important; }
+
+    .quick-wins-list li { color: #333 !important; }
+    .quick-wins-list li i { color: #16a34a !important; }
+
+    .bm-card { background: #f9fafb !important; border: 1px solid #e5e7eb !important; border-radius: 8px !important; }
+    .bm-name { color: #111 !important; }
+    .bm-stat-val { color: #222 !important; }
+    .bm-stat-lbl, .bm-genre { color: #666 !important; }
+    .benchmark-scroll { overflow: visible !important; flex-wrap: wrap !important; gap: 0.75rem !important; }
+    .ba-item p { color: #333 !important; }
+    .ba-label { color: #555 !important; }
+    .benchmark-analysis-bar { background: #f9fafb !important; border: 1px solid #e5e7eb !important; }
+
+    .playbook-card { background: #f9fafb !important; border: 1px solid #e5e7eb !important; }
+    .playbook-card-index { background: #f3f4f6 !important; color: #aaa !important; }
+    .playbook-artist-name, .playbook-step p { color: #222 !important; }
+    .playbook-step { border-left-color: #d1d5db !important; }
+    .playbook-step--breakthrough { border-left-color: #f97316 !important; }
+    .playbook-step--lesson { border-left-color: #16a34a !important; }
+    .playbook-step--viral { border-left-color: #d97706 !important; }
+    .playbook-step-label { color: #666 !important; }
+    .playbook-step--breakthrough .playbook-step-label { color: #ea580c !important; }
+    .playbook-step--lesson .playbook-step-label { color: #15803d !important; }
+    .playbook-action-steps li { color: #333 !important; }
+    .playbook-badge { background: #f3f4f6 !important; color: #555 !important; border-color: #d1d5db !important; }
+    .playbook-meta-item { background: #f9fafb !important; border-color: #e5e7eb !important; color: #444 !important; }
+    .playbook-grid { grid-template-columns: 1fr !important; }
+
+    .audio-strat-card { background: #f9fafb !important; border: 1px solid #e5e7eb !important; }
+    .audio-strat-label { color: #15803d !important; }
+    .audio-playlist-item { color: #333 !important; }
+    .audio-playlist-item i { color: #16a34a !important; }
+    .audio-sync-label { color: #555 !important; }
+    .audio-sync-val { color: #333 !important; }
+
+    .press-card { background: white !important; border: 1px solid #e5e7eb !important; }
+    .press-card-icon { background: #f3f4f6 !important; color: #888 !important; }
+    .press-outlet-name { color: #111 !important; }
+    .press-outlet-section { background: #f0fdf4 !important; color: #15803d !important; border-color: #86efac !important; }
+    .press-outlet-why { color: #444 !important; }
+
+    .ai-disclaimer { background: #f9fafb !important; border-color: #e5e7eb !important; color: #666 !important; }
+
+    /* Page breaks */
+    .strategy-section, .strategy-2col, .strategy-3col, .mt-4 { page-break-before: auto !important; }
+    .strategy-card, .plan-phase, .playbook-card, .press-card, .bm-card { page-break-inside: avoid !important; }
+    #benchmarks-section, #playbook-section { page-break-before: always !important; }
+
+    /* Grid on print */
+    .strategy-2col { grid-template-columns: 1fr 1fr !important; }
+    .strategy-3col { grid-template-columns: 1fr 1fr 1fr !important; }
+    .audio-strategy-grid { grid-template-columns: 1fr 1fr !important; }
+    .press-grid { grid-template-columns: 1fr 1fr !important; }
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -43,10 +164,58 @@
     </div>
 </div>
 
-{# ─── LOADING OVERLAY ───────────────────────────────────────────────── #}
-<div class="container" style="padding-top:2rem; padding-bottom:3rem;" id="marketing-body">
+{# ── PDF PRINT HEADER (hidden on screen, shown in print) ── #}
+<div class="print-pdf-header" style="display:none; align-items:center; gap:1rem; padding:0 0 1.25rem; border-bottom:2px solid #e5e7eb; margin-bottom:1.5rem;">
+    {% if artist.images %}
+    <img src="{{ artist.images[-1].url if artist.images|length > 1 else artist.images[0].url }}"
+         alt="{{ artist.name }}" style="width:48px; height:48px; border-radius:50%; object-fit:cover;">
+    {% endif %}
+    <div>
+        <div style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#888; margin-bottom:0.2rem;">FuzzTracks AI Marketing Strategy</div>
+        <div style="font-size:1.4rem; font-weight:800; color:#111;">{{ artist.name }}</div>
+    </div>
+    <div style="margin-left:auto; font-size:0.75rem; color:#aaa;" id="pdf-date"></div>
+</div>
 
-    <div id="marketing-loading" class="marketing-loading-state">
+{# ─── MAIN BODY ──────────────────────────────────────────────────────── #}
+<div class="container print-root" style="padding-top:2rem; padding-bottom:3rem;" id="marketing-body">
+
+    {# ── INTENT INPUT FORM ── #}
+    <div id="marketing-intent" class="marketing-intent-wrap">
+        <div class="intent-hero">
+            <div class="intent-hero-icon"><i class="fas fa-brain"></i></div>
+            <h2>What's your goal?</h2>
+            <p>Describe your current situation or upcoming release so the AI can craft a laser-focused strategy.<br>
+               Or skip to get a general playbook.</p>
+        </div>
+        <div class="intent-form-body">
+            <textarea id="intent-textarea" class="intent-textarea"
+                placeholder="e.g. I want to release the first single of my new EP. It sounds like Dominic Fike and Malcolm Todd. I'm based in Berlin and want to break into the UK market..."
+                rows="4" maxlength="1500"></textarea>
+            <div class="intent-char-count"><span id="intent-chars">0</span> / 1500</div>
+
+            <div class="intent-chips-label">Quick-fill examples:</div>
+            <div class="intent-chips">
+                <button class="intent-chip" onclick="fillIntent('I want to release my debut single and build my first real fanbase from scratch.')">Debut single</button>
+                <button class="intent-chip" onclick="fillIntent('I\'m releasing an EP in 6 weeks and need a pre-release rollout strategy to maximise first-week streams.')">EP pre-release</button>
+                <button class="intent-chip" onclick="fillIntent('I want to pitch my music to sync licensing opportunities — TV, film, and ads.')">Sync licensing</button>
+                <button class="intent-chip" onclick="fillIntent('I want to grow my Spotify monthly listeners from 5K to 50K in the next 6 months.')">Grow listeners</button>
+                <button class="intent-chip" onclick="fillIntent('I want to book my first regional tour and need a strategy to build demand in key cities.')">First tour</button>
+            </div>
+
+            <div class="intent-actions-row">
+                <button class="btn btn-secondary" onclick="generateStrategy(true)">
+                    <i class="fas fa-forward"></i> Skip — general strategy
+                </button>
+                <button class="btn btn-primary intent-generate-btn" onclick="generateStrategy(false)">
+                    <i class="fas fa-magic"></i> Generate strategy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── LOADING STATE ── #}
+    <div id="marketing-loading" class="marketing-loading-state" style="display:none">
         <div class="marketing-loading-inner">
             <div class="marketing-loading-icon">
                 <div class="loading-spinner loading-spinner--lg"></div>
@@ -64,6 +233,31 @@
     </div>
 
     <div id="marketing-content" style="display:none">
+
+        {# ── INTENT ACTIONS (shown when intent was provided) ── #}
+        <div class="intent-actions-card" id="intent-actions-card" style="display:none">
+            <div class="intent-actions-card-header">
+                <i class="fas fa-crosshairs"></i>
+                <div>
+                    <h2>Your Mission: <span id="ia-goal-text"></span></h2>
+                    <span class="intent-priority-badge" id="ia-priority-badge"></span>
+                </div>
+                <button class="btn btn-secondary btn-sm intent-regenerate-btn" onclick="showIntentForm()">
+                    <i class="fas fa-edit"></i> Change goal
+                </button>
+            </div>
+            <div class="intent-steps-list" id="ia-steps-list"></div>
+            <div class="intent-metric-row">
+                <div class="intent-metric-item">
+                    <span class="intent-metric-label"><i class="fas fa-bullseye"></i> Success Metric</span>
+                    <span class="intent-metric-value" id="ia-success-metric"></span>
+                </div>
+                <div class="intent-metric-item">
+                    <span class="intent-metric-label"><i class="fas fa-calendar"></i> Timeline</span>
+                    <span class="intent-metric-value" id="ia-timeline"></span>
+                </div>
+            </div>
+        </div>
 
         {# ── POSITIONING HERO ── #}
         <div class="strategy-positioning-card" id="positioning-card">
@@ -158,6 +352,18 @@
 
         </div>
 
+        {# ── AUDIO STRATEGY ── #}
+        <div class="strategy-section mt-4 hidden" id="audio-strategy-section">
+            <div class="strategy-section-header">
+                <i class="fas fa-waveform-lines strategy-section-icon"></i>
+                <div>
+                    <h2 class="strategy-section-title">Audio DNA Strategy</h2>
+                    <p class="strategy-section-desc">Playlist targeting and sync viability derived from your sonic fingerprint</p>
+                </div>
+            </div>
+            <div class="audio-strategy-grid" id="audio-strategy-grid"></div>
+        </div>
+
         {# ── PLAYLIST + LABEL + COLLAB ── #}
         <div class="strategy-3col mt-4">
 
@@ -202,11 +408,21 @@
             <div class="press-grid" id="press-grid"></div>
         </div>
 
-        {# ── AI DISCLAIMER ── #}
+        {# ── AI DISCLAIMER + ACTIONS ── #}
         <div class="ai-disclaimer mt-4">
-            <i class="fas fa-robot"></i>
-            Strategy generated by Gemini AI based on Spotify, Last.fm, and MusicBrainz data.
-            Verify all information independently before acting.
+            <div>
+                <i class="fas fa-robot"></i>
+                Strategy generated by Gemini AI based on Spotify, Last.fm, and MusicBrainz data.
+                Verify all information independently before acting.
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-shrink:0;">
+                <button class="btn btn-secondary btn-sm" onclick="exportPDF()">
+                    <i class="fas fa-file-pdf"></i> Export PDF
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="showIntentForm()">
+                    <i class="fas fa-redo"></i> New strategy
+                </button>
+            </div>
         </div>
 
     </div><!-- /marketing-content -->
@@ -215,9 +431,14 @@
         <div class="empty-state error-state" style="padding:4rem 2rem;">
             <i class="fas fa-exclamation-triangle" style="font-size:2.5rem; margin-bottom:1rem;"></i>
             <p id="marketing-error-msg">Could not generate strategy. Please try again.</p>
-            <button class="btn btn-primary mt-3" onclick="loadStrategy()">
-                <i class="fas fa-redo"></i> Retry
-            </button>
+            <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1rem;">
+                <button class="btn btn-secondary" onclick="showIntentForm()">
+                    <i class="fas fa-edit"></i> Change goal
+                </button>
+                <button class="btn btn-primary" onclick="generateStrategy(false, true)">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
         </div>
     </div>
 
@@ -231,9 +452,49 @@
     'use strict';
 
     const ARTIST_ID = {{ artist.id | tojson }};
+    const ARTIST_NAME = {{ artist.name | tojson }};
 
-    // ── sessionStorage cache (30 min TTL) ──────────────────────────
+    // ── intent textarea char counter ───────────────────────────────
+    const intentTA = document.getElementById('intent-textarea');
+    if (intentTA) {
+        intentTA.addEventListener('input', () => {
+            document.getElementById('intent-chars').textContent = intentTA.value.length;
+        });
+    }
+
+    // ── quick-fill chips ───────────────────────────────────────────
+    window.fillIntent = function(text) {
+        if (intentTA) {
+            intentTA.value = text;
+            intentTA.dispatchEvent(new Event('input'));
+            intentTA.focus();
+        }
+    };
+
+    // ── show intent form (reset) ───────────────────────────────────
+    window.showIntentForm = function() {
+        document.getElementById('marketing-intent').style.display = '';
+        document.getElementById('marketing-loading').style.display = 'none';
+        document.getElementById('marketing-content').style.display = 'none';
+        document.getElementById('marketing-error').style.display = 'none';
+    };
+
+    // ── PDF export via browser print ───────────────────────────────
+    window.exportPDF = function() {
+        const dateEl = document.getElementById('pdf-date');
+        if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', { year:'numeric', month:'long', day:'numeric' });
+        document.title = `${ARTIST_NAME} — Marketing Strategy`;
+        window.print();
+    };
+
+    // ── sessionStorage cache (30 min TTL, keyed by intent) ─────────
     const CACHE_TTL = 30 * 60 * 1000;
+    function cacheKey(intent) {
+        // simple hash so different intents don't collide
+        let h = 0;
+        for (let i = 0; i < intent.length; i++) h = (Math.imul(31, h) + intent.charCodeAt(i)) | 0;
+        return `ft_${ARTIST_ID}_ms_v4_${h}`;
+    }
     function cacheGet(key) {
         try {
             const raw = sessionStorage.getItem(key);
@@ -259,6 +520,44 @@
 
     function tag(text, cls) {
         return `<span class="strategy-tag strategy-tag--${cls || 'default'}">${text}</span>`;
+    }
+
+    function renderIntentActions(s, intent) {
+        const card = document.getElementById('intent-actions-card');
+        if (!card) return;
+        const ia = s && s.intent_actions;
+        if (!ia && !intent) { card.style.display = 'none'; return; }
+
+        const goal = (ia && ia.goal) || intent || '';
+        const priorityFocus = ia && ia.priority_focus ? ia.priority_focus.replace(/_/g, ' ') : '';
+        const steps = ia && ia.immediate_steps ? ia.immediate_steps : [];
+        const metric = ia && ia.success_metric || '';
+        const timeline = ia && ia.timeline || '';
+
+        setText('ia-goal-text', goal);
+
+        const badge = document.getElementById('ia-priority-badge');
+        if (badge && priorityFocus) {
+            badge.textContent = priorityFocus;
+            badge.style.display = '';
+        } else if (badge) {
+            badge.style.display = 'none';
+        }
+
+        const stepsEl = document.getElementById('ia-steps-list');
+        if (stepsEl && steps.length) {
+            stepsEl.innerHTML = steps.map((step, i) =>
+                `<div class="intent-step-item">
+                    <div class="intent-step-num">${i + 1}</div>
+                    <p>${step}</p>
+                </div>`
+            ).join('');
+        }
+
+        setText('ia-success-metric', metric || '—');
+        setText('ia-timeline', timeline || '—');
+
+        card.style.display = '';
     }
 
     function renderStrategy(s) {
@@ -421,6 +720,37 @@
             }
         }
 
+        // Audio Strategy
+        if (s.audio_strategy) {
+            const as = s.audio_strategy;
+            const syncFit = as.sync_fit || {};
+            const playlists = (as.top_playlists_to_target || []).map(p => `<div class="audio-playlist-item"><i class="fas fa-chevron-right"></i> ${p}</div>`).join('');
+            const syncItems = Object.entries(syncFit).map(([k, v]) =>
+                `<div class="audio-sync-item"><span class="audio-sync-label">${k.replace(/_/g,' ')}</span><span class="audio-sync-val">${v}</span></div>`
+            ).join('');
+            const grid = document.getElementById('audio-strategy-grid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="audio-strat-card">
+                        <div class="audio-strat-label"><i class="fas fa-fingerprint"></i> Sound Profile</div>
+                        <p class="audio-strat-text">${as.mood_profile || '—'}</p>
+                    </div>
+                    <div class="audio-strat-card">
+                        <div class="audio-strat-label"><i class="fas fa-list-music"></i> Playlist Targets</div>
+                        <div class="audio-playlist-list">${playlists || '—'}</div>
+                    </div>
+                    <div class="audio-strat-card">
+                        <div class="audio-strat-label"><i class="fas fa-star"></i> Lead Track</div>
+                        <p class="audio-strat-text">${as.standout_track || '—'}</p>
+                    </div>
+                    <div class="audio-strat-card">
+                        <div class="audio-strat-label"><i class="fas fa-film"></i> Sync Fit</div>
+                        <div class="audio-sync-grid">${syncItems || '—'}</div>
+                    </div>`;
+                document.getElementById('audio-strategy-section').classList.remove('hidden');
+            }
+        }
+
         // Benchmark analysis bar
         if (s.benchmark_analysis) {
             const ba = s.benchmark_analysis;
@@ -571,34 +901,50 @@
         }, 2000);
     }
 
-    const MS_KEY = `ft_${ARTIST_ID}_marketing-strategy-v2`;
+    // ── generate strategy (called from form buttons) ───────────────
+    // skipIntent=true → send empty intent (general strategy)
+    // forceRefresh=true → ignore cache (retry after error)
+    window.generateStrategy = function(skipIntent, forceRefresh) {
+        const intent = skipIntent ? '' : (intentTA ? intentTA.value.trim() : '');
+        const KEY = cacheKey(intent);
 
-    function loadStrategy() {
-        const cached = cacheGet(MS_KEY);
-        if (cached) {
-            if (cached.error) {
-                document.getElementById('marketing-error').style.display = '';
-                setText('marketing-error-msg', cached.error);
-                return;
-            }
-            document.getElementById('marketing-loading').style.display = 'none';
-            renderStrategy(cached.strategy);
-            renderBenchmarks(cached.benchmark_peers || []);
-            document.getElementById('marketing-content').style.display = '';
-            return;
-        }
-
-        document.getElementById('marketing-loading').style.display = '';
+        // Hide intent form, show loading
+        document.getElementById('marketing-intent').style.display = 'none';
         document.getElementById('marketing-content').style.display = 'none';
         document.getElementById('marketing-error').style.display = 'none';
 
+        if (!forceRefresh) {
+            const cached = cacheGet(KEY);
+            if (cached) {
+                if (cached.error) {
+                    document.getElementById('marketing-error').style.display = '';
+                    setText('marketing-error-msg', cached.error);
+                    // Store intent for retry
+                    window._lastIntent = intent;
+                    return;
+                }
+                document.getElementById('marketing-loading').style.display = 'none';
+                renderIntentActions(cached.strategy, cached.intent || intent);
+                renderStrategy(cached.strategy);
+                renderBenchmarks(cached.benchmark_peers || []);
+                document.getElementById('marketing-content').style.display = '';
+                return;
+            }
+        }
+
+        window._lastIntent = intent;
+        document.getElementById('marketing-loading').style.display = '';
         const interval = animateLoadingSteps();
 
-        fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`)
+        fetch(`/api/artist/${ARTIST_ID}/marketing-strategy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ intent }),
+        })
             .then(r => r.json())
             .then(data => {
                 clearInterval(interval);
-                cacheSet(MS_KEY, data);
+                cacheSet(KEY, data);
                 document.getElementById('marketing-loading').style.display = 'none';
 
                 if (data.error) {
@@ -607,6 +953,7 @@
                     return;
                 }
 
+                renderIntentActions(data.strategy, data.intent || intent);
                 renderStrategy(data.strategy);
                 renderBenchmarks(data.benchmark_peers || []);
                 document.getElementById('marketing-content').style.display = '';
@@ -617,13 +964,7 @@
                 document.getElementById('marketing-error').style.display = '';
                 setText('marketing-error-msg', `Network error: ${err.message}`);
             });
-    }
-
-    // Auto-load on page open
-    loadStrategy();
-
-    // Expose for retry button (also clears cache so a retry fetches fresh data)
-    window.loadStrategy = function() { sessionStorage.removeItem(MS_KEY); loadStrategy(); };
+    };
 
 })();
 </script>

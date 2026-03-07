@@ -285,6 +285,63 @@
                     </ul>
                 </div>
                 {% endif %}
+
+                {# Global Market Reach (compact) #}
+                {% if total_markets %}
+                <div class="intel-card mt-4">
+                    <div class="intel-card-header">
+                        <i class="fas fa-globe card-icon card-icon--blue"></i>
+                        <h3>Global Market Reach</h3>
+                        <span class="badge badge-primary">{{ total_markets }} markets</span>
+                    </div>
+                    {% if market_breakdown %}
+                    <div class="market-regions">
+                        {% set region_max = market_breakdown.values() | max %}
+                        {% for region, count in market_breakdown.items() | sort(attribute='1', reverse=True) %}
+                        <div class="market-region-item">
+                            <div class="market-region-header">
+                                <span class="market-region-name">{{ region }}</span>
+                                <span class="market-region-count">{{ count }} countries</span>
+                            </div>
+                            <div class="market-bar-wrap">
+                                <div class="market-bar" style="width: {{ (count / region_max * 100) | round }}%"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="audience-signals mt-3">
+                        <div class="signal-item">
+                            <div class="signal-label">Availability</div>
+                            <div class="signal-value">
+                                {% if total_markets >= 100 %}
+                                <span class="signal-chip signal-chip--high">Worldwide</span>
+                                {% elif total_markets >= 50 %}
+                                <span class="signal-chip signal-chip--mid">Broad</span>
+                                {% elif total_markets > 0 %}
+                                <span class="signal-chip signal-chip--low">Limited</span>
+                                {% else %}
+                                <span class="signal-chip">Unknown</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="signal-item">
+                            <div class="signal-label">Artist Tier</div>
+                            <div class="signal-value">
+                                {% set pop = artist.popularity or 0 %}
+                                {% if pop >= 80 %}<span class="signal-chip signal-chip--high">Mainstream</span>
+                                {% elif pop >= 60 %}<span class="signal-chip signal-chip--high">Established</span>
+                                {% elif pop >= 40 %}<span class="signal-chip signal-chip--mid">Rising</span>
+                                {% elif pop >= 20 %}<span class="signal-chip signal-chip--low">Emerging</span>
+                                {% else %}<span class="signal-chip">Underground</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <a href="#tab-audience" class="overview-audience-link" onclick="document.querySelector('[data-tab=audience]').click()">
+                        <i class="fas fa-chart-pie"></i> Full audience breakdown
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -407,6 +464,19 @@
                     {% else %}
                     <p class="empty-msg">No market data available.</p>
                     {% endif %}
+                </div>
+
+                {# Sound Profile Radar #}
+                <div class="intel-card mt-4" id="sound-profile-card" style="display:none">
+                    <div class="intel-card-header">
+                        <i class="fas fa-waveform-lines card-icon card-icon--purple"></i>
+                        <h3>Sound Profile</h3>
+                        <span class="badge badge-secondary">Audio DNA</span>
+                    </div>
+                    <div class="radar-wrap">
+                        <canvas id="audio-radar" width="300" height="300"></canvas>
+                    </div>
+                    <div class="radar-legend" id="radar-legend"></div>
                 </div>
 
                 {# Popularity Context #}
@@ -641,6 +711,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
     'use strict';
@@ -652,6 +723,78 @@
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
 
+    let _pendingRadarData = null;
+    let _radarChartCreated = false;
+
+    function createRadarChart(av) {
+        const keys = ['energy', 'danceability', 'valence', 'acousticness', 'instrumentalness'];
+        const labels = ['Energy', 'Danceability', 'Valence', 'Acousticness', 'Instrumentalness'];
+        const vals = keys.map(k => Math.round((av[k] || 0) * 100));
+
+        const card = document.getElementById('sound-profile-card');
+        if (card) card.style.display = '';
+
+        const ctx = document.getElementById('audio-radar')?.getContext('2d');
+        if (ctx) {
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: vals,
+                        backgroundColor: 'rgba(139,92,246,0.18)',
+                        borderColor: 'rgba(139,92,246,0.9)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(139,92,246,1)',
+                        pointRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        r: {
+                            min: 0, max: 100,
+                            ticks: { display: false, stepSize: 25 },
+                            grid: { color: 'rgba(255,255,255,0.08)' },
+                            angleLines: { color: 'rgba(255,255,255,0.08)' },
+                            pointLabels: {
+                                color: 'rgba(255,255,255,0.7)',
+                                font: { size: 11 }
+                            }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        const legendEl = document.getElementById('radar-legend');
+        if (legendEl) {
+            const descriptions = {
+                energy: ['Low', 'Moderate', 'High'],
+                danceability: ['Not danceable', 'Moderate', 'Highly danceable'],
+                valence: ['Dark', 'Neutral', 'Upbeat'],
+                acousticness: ['Electronic', 'Mixed', 'Acoustic'],
+                instrumentalness: ['Vocal-led', 'Balanced', 'Instrumental'],
+            };
+            legendEl.innerHTML = keys.map((k, i) => {
+                const pct = vals[i];
+                const desc = descriptions[k];
+                const d = pct < 34 ? desc[0] : pct < 67 ? desc[1] : desc[2];
+                return `<div class="radar-legend-item">
+                    <span class="radar-legend-key">${labels[i]}</span>
+                    <span class="radar-legend-bar-wrap"><span class="radar-legend-bar" style="width:${pct}%"></span></span>
+                    <span class="radar-legend-val">${pct}% <em>${d}</em></span>
+                </div>`;
+            }).join('');
+            if (av.tempo) {
+                legendEl.innerHTML += `<div class="radar-tempo"><i class="fas fa-metronome"></i> <strong>${av.tempo} BPM</strong></div>`;
+            }
+        }
+        _radarChartCreated = true;
+    }
+
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const target = btn.dataset.tab;
@@ -659,6 +802,10 @@
             tabContents.forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('tab-' + target)?.classList.add('active');
+            // Lazy-create radar chart when Audience tab becomes visible
+            if (target === 'audience' && _pendingRadarData && !_radarChartCreated) {
+                createRadarChart(_pendingRadarData);
+            }
         });
     });
 
@@ -896,6 +1043,20 @@
                 if (statsEl) {
                     statsEl.innerHTML = `<p class="empty-msg" style="padding:.5rem 0">Last.fm stats not available.</p>`;
                     statsEl.style.display = '';
+                }
+            }
+
+            // ── Audio Radar ─────────────────────────────────────────
+            if (data.audio_averages && Object.keys(data.audio_averages).length > 1) {
+                _pendingRadarData = data.audio_averages;
+                // If Audience tab is already active, render immediately
+                const audienceTab = document.getElementById('tab-audience');
+                if (audienceTab && audienceTab.classList.contains('active')) {
+                    createRadarChart(data.audio_averages);
+                } else {
+                    // Show card placeholder so tab has visual indicator, render on tab click
+                    const card = document.getElementById('sound-profile-card');
+                    if (card) card.style.display = '';
                 }
             }
 
